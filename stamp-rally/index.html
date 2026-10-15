@@ -313,6 +313,7 @@ function open(s) {
   setMode(got);
   if (!got) buildChoices(s);
   $("dlg").showModal();
+  if (document.activeElement) document.activeElement.blur(); // 1つ目の選択肢に枠（フォーカス）が付かないようにする
 }
 
 $("form").addEventListener("submit", e => { e.preventDefault(); $("dlg").close(); });
