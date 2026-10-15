@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>学校見学会 スタンプラリー</title>
+<title>校内クイズ探検</title>
 <style>
   :root {
     --bg: #f6f3ea; --card: #fff; --ink: #222; --sub: #6b6b6b;
@@ -29,7 +29,7 @@
   .spot .hint { font-size: .75rem; color: var(--sub); display: block; margin-top: 2px; }
   .spot.done { border: 2px solid var(--main); }
   .spot.done .emoji { animation: pop .4s; }
-  .spot.done::after { content: "✔ 獲得！"; display: block; color: var(--main); font-weight: 700; margin-top: 6px; font-size: .85rem; }
+  .spot.done::after { content: "✔ 正解！"; display: block; color: var(--main); font-weight: 700; margin-top: 6px; font-size: .85rem; }
   @keyframes pop { 0% { transform: scale(.3) rotate(-30deg); } 70% { transform: scale(1.3); } 100% { transform: scale(1); } }
   dialog { border: none; border-radius: 16px; padding: 20px; width: min(90vw, 380px); background: var(--card); color: var(--ink); }
   dialog::backdrop { background: rgba(0,0,0,.5); }
@@ -72,9 +72,9 @@
 </head>
 <body>
 <main>
-  <h1>🏫 校内スタンプラリー</h1>
+  <h1>🏫 校内クイズ探検</h1>
   <p class="lead" style="margin-bottom:2px">令和8年度 学校説明会｜駒澤大学高等学校</p>
-  <p class="lead">保護者の方といっしょに、校内に貼ってある番号①〜⑫の場所を回ろう。<br>問題の絵を4つの中から選んで、正解するとスタンプ獲得！ 教室の中や案内図がヒントだよ。<br>靴カバーを着けて見学してください。</p>
+  <p class="lead">保護者の方といっしょに、校内に貼ってある番号①〜⑫の場所を回りながらクイズに挑戦！<br>絵を4つの中から選ぼう。その場所で実際に見ながら答えると、もっと楽しいよ。<br>靴カバーを着けて見学してください。</p>
 
   <div class="clear" id="clear">
     <strong>🎉 コンプリート！</strong>
@@ -88,7 +88,7 @@
   </div>
 
   <section class="progress">
-    <div><strong id="count">0</strong> / <span id="total"></span> 個で完成（全<span id="all"></span>か所）</div>
+    <div><strong id="count">0</strong> / <span id="total"></span> 問正解で完成（全<span id="all"></span>問）</div>
     <div class="bar"><div id="fill"></div></div>
     <div class="rank" id="rank"></div>
   </section>
@@ -259,7 +259,7 @@ function open(s) {
 
 $("form").addEventListener("submit", e => { e.preventDefault(); $("dlg").close(); });
 $("cancel").onclick = () => $("dlg").close();
-$("reset").onclick = () => { if (confirm("獲得したスタンプをすべて消します。よろしいですか？")) { done = []; save(done); render(); } };
+$("reset").onclick = () => { if (confirm("これまでの正解の記録をすべて消します。よろしいですか？")) { done = []; save(done); render(); } };
 
 $("certDate").textContent = new Date().toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" }) + " 認定";
 $("nick").value = lsGet(NKEY);
