@@ -7,7 +7,7 @@
 import sys, pathlib, io, re
 import segno
 
-URL = sys.argv[1] if len(sys.argv) > 1 else "https://iyokoyama-13641.github.io/komadai-hs-pr/#poster"
+URL = sys.argv[1] if len(sys.argv) > 1 else "https://iyokoyama-13641.github.io/komadai-hs-pr/?mode=poster"
 here = pathlib.Path(__file__).parent
 buf = io.BytesIO()
 segno.make(URL, error="m").save(buf, kind="svg", scale=1, border=2, dark="#111111", light="#ffffff", xmldecl=False, svgns=True, nl=False)
@@ -22,7 +22,7 @@ HTML = """<!doctype html>
 <style>
   @page { size: A4; margin: 0; }
   * { box-sizing: border-box; }
-  body { margin: 0; color: #111; font-family: "Hiragino Sans", "Noto Sans JP", "Noto Sans CJK JP", system-ui, sans-serif; }
+  body { margin: 0; color: #111; font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", "Noto Sans JP", "Noto Sans CJK JP", "IPAexGothic", "IPAGothic", sans-serif; }
   .page { width: 210mm; height: 297mm; padding: 12mm 16mm 10mm; display: flex; flex-direction: column; align-items: center; gap: 5mm; text-align: center; }
   .banner { flex: none; width: 100%; height: 66mm; border-radius: 6mm; color: #fff; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; padding: 6mm 8mm; text-align: left; text-shadow: 0 0 4mm rgba(0, 0, 0, .6);
     background: linear-gradient(180deg, rgba(0, 0, 0, 0) 30%, rgba(0, 0, 0, .7)), url("../docs/hero.jpg") center 58% / cover #1f5a45; }

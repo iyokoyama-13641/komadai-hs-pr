@@ -534,7 +534,12 @@ $("replay").onclick = () => grand();
 const showSnd = () => { $("snd").textContent = soundOn ? "🔊 効果音：オン" : "🔇 効果音：オフ"; $("snd").setAttribute("aria-pressed", soundOn); };
 $("snd").onclick = () => { soundOn = !soundOn; lsSet("stamp-rally-snd", soundOn ? "1" : "0"); showSnd(); tone([[784, .15]]); };
 showSnd();
-let posterMode = location.hash === "#poster" || lsGet("stamp-rally-poster") === "1";
+// どちらで遊ぶかは、開くアドレスで決まる（参加者にはボタンを見せない）。
+//   .../?mode=poster または .../#poster … ポスター版（案内紙のQRコード）
+//   .../?staff または .../#staff … 先生用：切り替えボタンを表示（確認用）
+const addr = location.search + location.hash, staffView = /staff/.test(addr);
+let posterMode = /poster/.test(addr) || (staffView && lsGet("stamp-rally-poster") === "1");
+$("pmode").hidden = !staffView;
 const showPm = () => { $("pmode").textContent = posterMode ? "🖼️ ポスター版：オン" : "🖼️ ポスター版：オフ"; $("pmode").setAttribute("aria-pressed", posterMode); };
 $("pmode").onclick = () => { posterMode = !posterMode; lsSet("stamp-rally-poster", posterMode ? "1" : "0"); showPm(); };
 showPm();

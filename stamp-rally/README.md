@@ -11,7 +11,7 @@
 1. GitHub のこのリポジトリで **Settings → Pages** を開く
 2. Source を「Deploy from a branch」、Branch を `main`、フォルダを **`/docs`** にして Save
 3. 数分後に公開URL `https://iyokoyama-13641.github.io/komadai-hs-pr/` で開ける
-4. ポスター版で開くURLは、末尾に `#poster` を付けたもの（案内紙のQRコードはこちら）
+4. ポスター版で開くURLは、末尾に `?mode=poster` を付けたもの（案内紙のQRコードはこちら）。参加者には切り替えボタンは表示されません。先生用に、`?staff` を付けると、ポスター版/通常版の切り替えボタンが出ます
 
 ## 注意
 - このリポジトリは **公開(public)** です。訪問カードなど、個人情報を含むファイルは置かないでください。
