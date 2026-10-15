@@ -112,6 +112,7 @@
   .bar { position: relative; }
   .bar .mark { position: absolute; top: 0; bottom: 0; width: 3px; background: var(--ink); opacity: .55; }
   .stage { margin-top: 8px; font-weight: 700; color: var(--main); }
+  .privacy { margin: 18px 0 4px; font-size: .75rem; color: var(--sub); text-align: center; }
 </style>
 </head>
 <body>
@@ -149,6 +150,7 @@
   <section class="grid" id="grid"></section>
 
   <div class="reset"><button id="reset">最初からやり直す</button></div>
+  <p class="privacy" id="privacy" hidden>このページは、ご利用の人数を知るため、個人を特定しない形でアクセス数を記録しています。</p>
 </main>
 
 <dialog id="dlg">
@@ -293,6 +295,30 @@ let done = load();
 let current = null;
 
 const $ = id => document.getElementById(id);
+
+// ===== 利用人数の集計（GoatCounter）=====
+// 個人は特定せず、「開いた端末の数」と、クイズの進み具合（1問目の正解・ステージクリア・コンプリート）だけを数える。
+// GC_CODE に、GoatCounter で決めたサイトの名前を入れると始まる（空のままなら何も送らない）。
+const GC_CODE = "";
+const GC_HOSTS = ["iyokoyama-13641.github.io"];   // 公開ページでだけ数える（確認用の画面は数えない）
+const gcOn = !!GC_CODE && GC_HOSTS.includes(location.hostname) && !/staff/.test(location.search + location.hash);
+if (gcOn) {
+  const sc = document.createElement("script");
+  sc.async = true; sc.dataset.goatcounter = "https://" + GC_CODE + ".goatcounter.com/count"; sc.src = "https://gc.zgo.at/count.js";
+  document.head.appendChild(sc);
+  $("privacy").hidden = false;
+}
+// 同じ端末からは、各イベントを1回だけ送る
+function track(name, title) {
+  if (!gcOn) return;
+  const key = "stamp-rally-gc-" + name;
+  if (lsGet(key)) return;
+  let tries = 0;
+  (function go() {
+    if (window.goatcounter && window.goatcounter.count) { lsSet(key, "1"); window.goatcounter.count({ path: "event/" + name, title, event: true }); }
+    else if (tries++ < 10) setTimeout(go, 1000);
+  })();
+}
 $("all").textContent = SPOTS.length; $("mark").style.left = (GOAL / SPOTS.length * 100) + "%";
 
 function render() {
@@ -328,6 +354,9 @@ function onRight(s) {
   done.push(s.id); save(done); render(); setMode(true, true);
   if (done.length >= SPOTS.length) $("hit").textContent = "👑 コンプリート！";
   else if (done.length === GOAL) $("hit").textContent = "🏅 ステージクリア！";
+  track("first-correct", "1問目に正解");
+  if (done.length >= GOAL) track("stage-clear", "ステージクリア（8問）");
+  if (done.length >= SPOTS.length) track("complete", "コンプリート（13問）");
   celebrate(done.length);
 }
 function onWrong(b) { b.classList.add("wrong", "shake"); miss(); $("err").textContent = "ざんねん！ もういちど考えてみよう。"; }
