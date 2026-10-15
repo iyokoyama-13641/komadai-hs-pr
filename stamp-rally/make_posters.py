@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""index.html の問題データ（SPOTS / ICONS）から、印刷用ポスター posters.html と答え一覧 poster-answers.md を作る。
+"""docs/index.html の問題データ（SPOTS / ICONS）から、印刷用ポスター posters.html と答え一覧 poster-answers.md を作る。
 問題を直したら、このスクリプトを実行し直してください： python3 make_posters.py
 """
 import re, json, subprocess, pathlib
 
 here = pathlib.Path(__file__).parent
-src = (here / "index.html").read_text(encoding="utf8")
+src = (here.parent / "docs" / "index.html").read_text(encoding="utf8")
 icons = re.search(r"const ICONS = \{.*?\n\};", src, re.S).group(0)
 spots = re.search(r"const SPOTS = \[.*?\n\];", src, re.S).group(0)
 
