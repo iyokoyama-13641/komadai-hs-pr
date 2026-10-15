@@ -345,14 +345,43 @@ function tone(seq, vol = .12) {
   } catch {}
 }
 // クリアの音：「ティリリリ ティ ティ ティー」。速い駆け上がりのあとに3つの音が続く。
+// 音の仕上げ：リバーブ（余韻）とエコーを付け、全体をコンプレッサーで整える。
+function masterBus() {
+  if (masterBus.in && masterBus.ctx === ac) return masterBus.in;
+  const comp = ac.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 4; comp.attack.value = .004; comp.release.value = .25;
+  const input = ac.createGain(), dry = ac.createGain(), wet = ac.createGain(), conv = ac.createConvolver(), dl = ac.createDelay(), fb = ac.createGain(), dw = ac.createGain();
+  const n = Math.floor(ac.sampleRate * 2), imp = ac.createBuffer(2, n, ac.sampleRate);
+  for (let c = 0; c < 2; c++) { const d = imp.getChannelData(c); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2.6); }
+  conv.buffer = imp; dry.gain.value = .75; wet.gain.value = .5; dl.delayTime.value = .17; fb.gain.value = .3; dw.gain.value = .22;
+  input.connect(dry); dry.connect(comp); input.connect(conv); conv.connect(wet); wet.connect(comp);
+  input.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(dw); dw.connect(comp); dw.connect(conv);
+  const mk = ac.createGain(); mk.gain.value = 2.4; comp.connect(mk); mk.connect(ac.destination);
+  masterBus.in = input; masterBus.ctx = ac;
+  return input;
+}
+// ベルのような音：基音＋倍音＋短く鳴る金属的な高音。わずかに音程をずらした2本で、きらめきを出す。
 function note(f, at, d, vol = .11) {
-  const t = ac.currentTime + at;
-  [[f, vol, "triangle"], [f * 2, vol * .35, "sine"]].forEach(([fr, v, ty]) => {
-    const o = ac.createOscillator(), g = ac.createGain();
-    o.type = ty; o.frequency.value = fr;
-    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(v, t + .008); g.gain.exponentialRampToValueAtTime(.0001, t + d);
-    o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + .02);
+  const t = ac.currentTime + at, out = masterBus();
+  const pan = ac.createStereoPanner ? ac.createStereoPanner() : null;
+  if (pan) { pan.pan.value = (Math.random() - .5) * .7; pan.connect(out); }
+  const dest = pan || out;
+  [[1, 1, 1, 0], [1, .6, 1, 7], [2, .38, .7, 0], [3, .16, .45, 0], [2.76, .12, .22, 0], [5.4, .05, .12, 0]].forEach(([r, a, df, cents]) => {
+    const o = ac.createOscillator(), g = ac.createGain(), dur = d * df;
+    o.type = "sine"; o.frequency.value = f * r; o.detune.value = cents;
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(vol * a, t + .004); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    o.connect(g); g.connect(dest); o.start(t); o.stop(t + dur + .03);
   });
+}
+// やわらかい和音（最後に重ねる）
+function pad(freqs, at, d, vol = .035) {
+  const t = ac.currentTime + at, out = masterBus(), lp = ac.createBiquadFilter();
+  lp.type = "lowpass"; lp.frequency.value = 1400; lp.connect(out);
+  freqs.forEach(f => [-6, 6].forEach(c => {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = "sawtooth"; o.frequency.value = f; o.detune.value = c;
+    g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(vol, t + .12); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+    o.connect(g); g.connect(lp); o.start(t); o.stop(t + d + .03);
+  }));
 }
 const NOTES = { C5: 523, E5: 659, G5: 784, C6: 1047, E6: 1319, G6: 1568, A6: 1760, C7: 2093, E7: 2637 };
 function phrase(run, at, step, tail, last) {
@@ -370,10 +399,10 @@ function jingle(level) {
     const e1 = phrase([C5, E5, G5, C6, E6], 0, .055, G6, C7);
     if (level >= 2) {
       const e2 = phrase([E5, G5, C6, E6, G6, C7], .95, .05, C7, E7);
-      [C6, E6, G6].forEach(f => note(f, e2, 1.1, .07));
+      [C6, E6, G6].forEach(f => note(f, e2, 1.4, .07)); pad([C5, E5, G5], e2, 1.6);
       if (level >= 3) {
         const e3 = phrase([G5, C6, E6, G6, C7, E7], 1.95, .045, E7, E7);
-        [C6, E6, G6, C7].forEach(f => note(f, e3, 1.6, .07));
+        [C6, E6, G6, C7].forEach(f => note(f, e3, 2, .07)); pad([C5, E5, G5, C6], e3, 2.4, .04);
       }
     }
   } catch {}
