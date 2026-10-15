@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><title>校内クイズ探検 ポスター</title>
+<style>
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: #111; background: #fff; font-family: "Hiragino Sans", "Noto Sans JP", "Noto Sans CJK JP", system-ui, sans-serif; }
+  .page { width: 210mm; height: 297mm; padding: 13mm 14mm; display: flex; flex-direction: column; gap: 6mm; page-break-after: always; break-after: page; overflow: hidden; }
+  .top { display: flex; justify-content: space-between; font-size: 11pt; color: #1f5a45; font-weight: 700; letter-spacing: .08em; }
+  h1 { margin: 0; font-size: 34pt; line-height: 1.2; }
+  .where { font-size: 12pt; color: #555; margin-top: 1mm; }
+  .q { font-size: 21pt; font-weight: 700; line-height: 1.45; padding: 5mm 6mm; border: 2.5pt solid #1f5a45; border-radius: 4mm; background: #f1f7f3; }
+  .grid { flex: 1; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 6mm; min-height: 0; }
+  .cell { position: relative; border: 2.5pt solid #333; border-radius: 5mm; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3mm; padding: 8mm 5mm 5mm; }
+  .no { position: absolute; left: 4mm; top: 4mm; width: 17mm; height: 17mm; border-radius: 50%; background: #1f5a45; color: #fff; font-size: 26pt; font-weight: 800; display: grid; place-items: center; }
+  .pic svg { width: 52mm; height: 52mm; stroke: #111; fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+  .pic svg .plate { stroke-width: 4.5; }
+  .pic .sw { display: block; width: 46mm; height: 46mm; border-radius: 50%; border: 1.5pt solid #999; }
+  .pic .em { font-size: 60pt; line-height: 1; }
+  .lab { font-size: 19pt; font-weight: 700; text-align: center; line-height: 1.3; }
+  .lab.big { font-size: 27pt; text-wrap: balance; }
+  .foot { font-size: 12pt; color: #333; text-align: center; border-top: 1pt solid #bbb; padding-top: 3mm; }
+</style></head><body>
+<div id="root"></div>
+<script>
+const ICONS = {
+  bench: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 46H46M12 46V58M42 46V58"/><circle cx="14" cy="38" r="4"/><path d="M19 41H40L48 48V58M27 41V22"/><path d="M12 22H42" /><path class="plate" d="M13 16V28M41 16V28"/></svg>',
+  squat: '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="26" cy="11" r="4"/><path d="M26 16V22L32 38L45 42L39 57H49M12 20H42"/><path class="plate" d="M12 14V26M42 14V26"/></svg>',
+  legpress: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M6 54H30M10 38L24 50"/><circle cx="8" cy="28" r="4"/><path d="M11 32L22 46L36 34L48 42"/><path class="plate" d="M50 24L54 54"/></svg>',
+  knife: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M46 28H14C10 28 6 32 6 34L16 46H46Z"/><path d="M46 31H60V43H46"/></svg>',
+  ladle: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M31 36L54 8"/><path d="M8 38H36A14 14 0 0 1 8 38Z"/></svg>',
+  whisk: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 58V38M32 38C18 32 18 14 32 8C46 14 46 32 32 38M32 38C26 30 26 16 32 8M32 38C38 30 38 16 32 8"/></svg>',
+  chopsticks: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M20 58L38 8M30 58L46 10M38 8Q42 4 46 10"/></svg>',
+  shinai: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M30 38L56 12L52 8L26 34Z"/><path d="M41 17L46 22"/><circle cx="26" cy="38" r="7"/><path d="M21 43L9 55"/></svg>',
+  umbrella: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M6 34C6 14 58 14 58 34Z"/><path d="M32 34V52C32 58 24 58 24 52"/></svg>',
+  bat: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M10.6 50.6L34.6 26.6L46.5 10.5L52.5 4.5L59.5 11.5L53.5 17.5L37.4 29.4L13.4 53.4Z"/><circle cx="10" cy="54" r="3"/></svg>',
+  broom: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 6V34"/><path d="M22 58L26 34H38L42 58Z"/><path d="M30 40V58M34 40V58"/></svg>',
+  projector: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M6 26H46V50H6Z"/><circle cx="54" cy="38" r="5"/><circle cx="26" cy="38" r="7"/></svg>',
+  stapler: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M6 46H58V52H6Z"/><path d="M8 46L12 32H52V46"/><path d="M40 52V58"/></svg>',
+  shredder: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M10 18H54V38H10Z"/><path d="M18 26H46M16 38V58M24 38V58M32 38V58M40 38V58M48 38V58"/></svg>',
+  calc: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M16 6H48V58H16Z"/><path d="M22 12H42V22H22Z"/><path d="M24 32h.1M32 32h.1M40 32h.1M24 42h.1M32 42h.1M40 42h.1M24 52h.1M32 52h.1M40 52h.1"/></svg>',
+  cpu: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M20 20H44V44H20Z"/><path d="M28 28H36V36H28Z"/><path d="M26 14V20M32 14V20M38 14V20M26 44V50M32 44V50M38 44V50M14 26H20M14 32H20M14 38H20M44 26H50M44 32H50M44 38H50"/></svg>',
+  keyboard: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M6 20H58V46H6Z"/><path d="M14 28h.1M22 28h.1M30 28h.1M38 28h.1M46 28h.1M14 36h.1M46 36h.1M22 38H38"/></svg>',
+  mouse: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M22 26C22 8 42 8 42 26V42C42 56 22 56 22 42Z"/><path d="M32 10V28M22 28H42"/></svg>',
+  display: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 10H56V42H8Z"/><path d="M32 42V52M20 54H44"/></svg>',
+  jupiter: '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="20"/><path d="M13 26H51M12 34H52M16 43H48"/><ellipse cx="40" cy="38" rx="4" ry="2.5"/></svg>',
+  saturn: '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="13"/><ellipse cx="32" cy="32" rx="28" ry="8" transform="rotate(-20 32 32)"/></svg>',
+  mars: '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="20"/><path d="M22 16C28 20 36 20 42 16"/><path d="M20 34C26 30 30 38 38 36"/></svg>',
+  earth: '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="20"/><path d="M20 20C26 16 30 22 26 28C22 30 18 26 20 20Z"/><path d="M36 34C42 32 46 38 42 46C38 46 34 40 36 34Z"/></svg>',
+  curl: '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="22" cy="10" r="4"/><path d="M22 15V38L16 58M22 38L30 58M22 20L27 32L37 23"/><path class="plate" d="M32 19L43 28"/></svg>'
+};
+const SPOTS = [
+  { id: "s1", pos: 2, emoji: "🏋️", name: "① トレーニングルーム", hint: "A地区 1階｜ジムみたいな部屋",
+    q: "胸の筋肉（大胸筋）を鍛えるのは、どれ？",
+    choices: [{"i": "bench", "t": "ベンチプレス"}, {"i": "squat", "t": "スクワット"}, {"i": "legpress", "t": "レッグプレス"}, {"i": "curl", "t": "アームカール"}], // 先頭が正解（表示時にシャッフル）
+    msg: "ベンチプレスは胸、スクワットとレッグプレスは脚、アームカールは腕の筋肉を鍛えます。ジムみたいなウエイトトレーニングマシーンがずらり。部活動や授業で使います。",
+    talk: "どのマシンを使ってみたい？ 親子で見つけてみよう。" },
+  { id: "s2", pos: 4, emoji: "🍰", name: "② 調理実習室", hint: "A地区 1階｜男女いっしょに実習",
+    q: "卵や生クリームを泡立てるときに使う道具は、どれ？",
+    choices: [{"i": "whisk", "t": "泡立て器"}, {"i": "ladle", "t": "おたま"}, {"i": "chopsticks", "t": "菜箸"}, {"i": "knife", "t": "包丁"}], // 先頭が正解（表示時にシャッフル）
+    msg: "泡立て器は、卵や生クリームに空気を含ませてふわふわにする道具で、ケーキ作りに大活躍。カレーライスからケーキまで作る実習室で、男子も女子も一緒に作ります！ 部屋の前に、大学の資料・昨年度の入試問題・部活動案内があるので、ご自由にどうぞ。",
+    talk: "ここで作ってみたい料理は何？" },
+  { id: "s3", pos: 1, emoji: "🖌️", name: "③ 書道室", hint: "A地区 1階",
+    q: "「〇〇も筆の誤り」ということわざの〇〇に入る、書の名人は誰？",
+    choices: [{"t": "弘法（空海）"}, {"t": "最澄"}, {"t": "聖徳太子"}, {"t": "織田信長"}], // 先頭が正解（表示時にシャッフル）
+    msg: "弘法大師（空海）は、書の名人としても有名です。書の名人でも、たまには書き間違えることがある。「名人でも失敗する」という意味のことわざです。この教室は、説明会の日は個別相談会場になっています。",
+    talk: "家族の中で、いちばん字がきれいなのは誰？" },
+  { id: "s4", pos: 3, emoji: "💻", name: "④ 情報処理実習室", hint: "A地区 1階｜2か所あるよ",
+    q: "パソコンの「頭脳」にあたり、計算や命令の処理をする部品は、どれ？",
+    choices: [{"i": "cpu", "t": "CPU"}, {"i": "keyboard", "t": "キーボード"}, {"i": "mouse", "t": "マウス"}, {"i": "display", "t": "ディスプレイ"}], // 先頭が正解（表示時にシャッフル）
+    msg: "CPU（シーピーユー）は、計算や命令の処理をするパソコンの頭脳です。難しいことも、やさしく、深く、楽しく学べる情報処理実習室。パソコンの部屋は全部で2か所あります。",
+    talk: "パソコンで作ってみたいものはある？" },
+  { id: "s5", pos: 3, emoji: "🎵", name: "⑤ 音楽室", hint: "A地区 1階",
+    q: "「運命」や「第九」を作曲した音楽家は、誰？",
+    choices: [{"t": "ベートーヴェン"}, {"t": "モーツァルト"}, {"t": "バッハ"}, {"t": "ショパン"}], // 先頭が正解（表示時にシャッフル）
+    msg: "「運命」「第九」はベートーヴェンの名曲です。耳が聞こえにくくなっても作曲を続けたことで知られています。ここは音楽の授業で使う特別教室です。",
+    talk: "家族それぞれの「最近よく聴く曲」を教え合ってみよう。" },
+  { id: "s6", pos: 1, emoji: "🎨", name: "⑥ 美術室", hint: "A地区 1階",
+    q: "絵の具の黄色と青を混ぜると、何色になる？",
+    choices: [{"c": "#2e9e4f", "t": "緑"}, {"c": "#7b3fa0", "t": "むらさき"}, {"c": "#f28c1c", "t": "オレンジ"}, {"c": "#f6a6c1", "t": "ピンク"}], // 先頭が正解（表示時にシャッフル）
+    msg: "黄色と青を混ぜると緑になります。ほかにも、赤と青でむらさき、赤と黄でオレンジ。色を混ぜるのは、美術の授業でも大活躍です。ここは美術の授業で使う特別教室です。",
+    talk: "小学校の図工で、いちばん好きだった作品は？" },
+  { id: "s7", pos: 4, emoji: "🥋", name: "⑦ 修道館", hint: "C地区 地下｜道場",
+    q: "武道は「〇〇に始まり、〇〇に終わる」といわれます。〇〇に入る言葉は、どれ？",
+    choices: [{"t": "礼"}, {"t": "技"}, {"t": "力"}, {"t": "勝ち"}], // 先頭が正解（表示時にシャッフル）
+    msg: "武道は「礼に始まり、礼に終わる」といわれます。相手や道場、道具への感謝と敬意を、おじぎ（礼）で表します。ここは伝統と趣のある道場。男子は体育の授業で柔道・剣道をやります。",
+    talk: "柔道と剣道、やってみたいのはどっち？" },
+  { id: "s8a", pos: 2, emoji: "🔭", name: "⑧ 物理・地学実験室", hint: "B地区 3階",
+    q: "太陽系の惑星で、いちばん大きいのは、どれ？",
+    choices: [{"i": "jupiter", "t": "木星"}, {"i": "saturn", "t": "土星"}, {"i": "mars", "t": "火星"}, {"i": "earth", "t": "地球"}], // 先頭が正解（表示時にシャッフル）
+    msg: "いちばん大きい惑星は木星です。地球が約1300個も入る大きさだといわれています。ここは物理・地学の実験をする実験室（3階）です。",
+    talk: "理科でいちばんおもしろかった実験は？" },
+  { id: "s8b", pos: 3, emoji: "🧪", name: "⑧ 生物・化学実験室", hint: "B地区 4階",
+    q: "血液の成分で、体じゅうに酸素を運んでいるのは、どれ？",
+    choices: [{"t": "赤血球"}, {"t": "白血球"}, {"t": "血小板"}, {"t": "血しょう"}], // 先頭が正解（表示時にシャッフル）
+    msg: "酸素を運ぶのは赤血球です。赤い色は、酸素と結びつく「ヘモグロビン」のはたらきです。ここは生物・化学の実験をする実験室（4階）です。",
+    talk: "調べてみたい生き物や、不思議に思うことはある？" },
+  { id: "s9", pos: 1, emoji: "🧘", name: "⑨ 坐禅堂", hint: "B地区 屋上",
+    q: "坐禅堂にお祀りしている仏様は、どなた？",
+    choices: [{"t": "文殊菩薩"}, {"t": "観音菩薩"}, {"t": "地蔵菩薩"}, {"t": "普賢菩薩"}], // 先頭が正解（表示時にシャッフル）
+    msg: "坐禅堂には、文殊菩薩（もんじゅぼさつ）様をお祀りしています。「三人寄れば文殊の知恵」の文殊です。本格的に坐禅ができる施設で、校舎の屋上にあります。",
+    talk: "ここで1分だけ、静かに深呼吸してみよう。" },
+  { id: "s10", pos: 4, emoji: "🥐", name: "⑩ 地下ホール・購買部", hint: "D地区 地下",
+    q: "パンをふくらませるのに使われる、小さな生き物は、どれ？",
+    choices: [{"t": "酵母（イースト）"}, {"t": "乳酸菌"}, {"t": "納豆菌"}, {"t": "大腸菌"}], // 先頭が正解（表示時にシャッフル）
+    msg: "パンがふくらむのは、酵母（イースト）が出す二酸化炭素のおかげです。ここはパンやおにぎりなどを売っている購買部がある、地下ホールです。",
+    talk: "お昼に買ってみたいのは何？" },
+  { id: "s11", pos: 2, emoji: "🎬", name: "⑪ 第一AV教室", hint: "D地区 2階",
+    q: "映画は、1秒間におよそ何枚の絵（写真）を次々に映して、動いて見せているでしょう？",
+    choices: [{"t": "24枚"}, {"t": "2枚"}, {"t": "240枚"}, {"t": "2400枚"}], // 先頭が正解（表示時にシャッフル）
+    msg: "映画は、1秒間に24枚（24コマ）の絵を次々に映して、動いているように見せています。パラパラ漫画と同じしくみです。ここはビデオなどを大画面で見られる教室です。",
+    talk: "大画面で見てみたい映画や動画は？" },
+  { id: "s12", pos: 3, emoji: "📚", name: "⑫ 図書室", hint: "D地区 3階",
+    q: "「吾輩は猫である」を書いた作家は、誰？",
+    choices: [{"t": "夏目漱石"}, {"t": "芥川龍之介"}, {"t": "太宰治"}, {"t": "宮沢賢治"}], // 先頭が正解（表示時にシャッフル）
+    msg: "「吾輩は猫である」は夏目漱石のデビュー作です。ここは蔵書が約4万冊の図書室（3階）。気になる本を探してみよう。",
+    talk: "最近読んだ本で、いちばんおもしろかったのは？" },
+];
+// 正解の位置（pos）に正解を置き、残りは元の順に並べる
+function posterOrder(s) {
+  const [right, ...wrong] = s.choices;
+  const list = wrong.slice(); list.splice(s.pos - 1, 0, right);
+  return list;
+}
+const pic = c => c.c ? `<span class="sw" style="background:${c.c}"></span>` : c.i ? ICONS[c.i] : c.e ? `<span class="em">${c.e}</span>` : "";
+document.getElementById("root").innerHTML = SPOTS.map(s => `
+<section class="page">
+  <div class="top"><span>校内クイズ探検</span><span>令和8年度 学校説明会｜駒澤大学高等学校</span></div>
+  <div><h1>${s.name}</h1><div class="where">${s.hint}</div></div>
+  <div class="q">${s.q}</div>
+  <div class="grid">${posterOrder(s).map((c, i) => `
+    <div class="cell"><div class="no">${i + 1}</div>
+      ${pic(c) ? `<div class="pic">${pic(c)}</div><div class="lab">${c.t}</div>` : `<div class="lab big">${c.t}</div>`}
+    </div>`).join("")}
+  </div>
+  <div class="foot">スマホの「校内クイズ探検」で、正しいと思う番号（1〜4）を選んでね。</div>
+</section>`).join("");
+</script></body></html>

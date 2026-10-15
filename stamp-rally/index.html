@@ -98,6 +98,11 @@
   .miss { position: fixed; inset: 0; display: grid; place-items: center; font-size: 12rem; line-height: 1; font-weight: 900; font-family: system-ui, sans-serif; color: #c0392b; pointer-events: none; z-index: 40; animation: missPop .75s ease-out forwards; }
   @keyframes missPop { 0% { transform: scale(.3); opacity: 0; } 25% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { dialog.shake-big, .miss { animation: none; } .miss { display: none; } }
+  .opts { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+  .opts .snd { margin: 0; }
+  .choices.nums { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .choice.num { font-size: 2rem; font-weight: 800; padding: 16px 0; color: var(--ink); }
+  .pnote { font-size: .85rem; color: var(--sub); margin: 0 0 8px; }
 </style>
 </head>
 <body>
@@ -118,7 +123,10 @@
     <button class="btn" id="replay" type="button" style="margin-top:8px">🎆 もう一度お祝い</button>
   </div>
 
-  <button class="snd" id="snd" type="button" aria-pressed="false">🔇 効果音：オフ</button>
+  <div class="opts">
+    <button class="snd" id="snd" type="button" aria-pressed="false">🔇 効果音：オフ</button>
+    <button class="snd" id="pmode" type="button" aria-pressed="false">🖼️ ポスター版：オフ</button>
+  </div>
 
   <section class="progress">
     <div><strong id="count">0</strong> / <span id="total"></span> 問正解で完成（全<span id="all"></span>問）</div>
@@ -141,6 +149,7 @@
     <p class="talk" id="dTalk" hidden><b>👨‍👩‍👧 親子トーク</b><span id="dTalkText"></span></p>
     <div id="askBox">
       <p class="q" id="dQ"></p>
+      <p class="pnote" id="pnote" hidden>📌 場所に貼ってあるポスターを見て、番号を選ぼう。</p>
       <div class="choices" id="choices"></div>
       <p class="err" id="err"></p>
     </div>
@@ -191,67 +200,67 @@ const ICONS = {
 };
 // ★ スポットの編集はここだけ。q=問題、choices=絵の4択（先頭が正解）、msg=特徴メッセージ、talk=親子トーク。
 const SPOTS = [
-  { id: "s1", emoji: "🏋️", name: "① トレーニングルーム", hint: "A地区 1階｜ジムみたいな部屋",
+  { id: "s1", pos: 2, emoji: "🏋️", name: "① トレーニングルーム", hint: "A地区 1階｜ジムみたいな部屋",
     q: "胸の筋肉（大胸筋）を鍛えるのは、どれ？",
     choices: [{"i": "bench", "t": "ベンチプレス"}, {"i": "squat", "t": "スクワット"}, {"i": "legpress", "t": "レッグプレス"}, {"i": "curl", "t": "アームカール"}], // 先頭が正解（表示時にシャッフル）
     msg: "ベンチプレスは胸、スクワットとレッグプレスは脚、アームカールは腕の筋肉を鍛えます。ジムみたいなウエイトトレーニングマシーンがずらり。部活動や授業で使います。",
     talk: "どのマシンを使ってみたい？ 親子で見つけてみよう。" },
-  { id: "s2", emoji: "🍰", name: "② 調理実習室", hint: "A地区 1階｜男女いっしょに実習",
+  { id: "s2", pos: 4, emoji: "🍰", name: "② 調理実習室", hint: "A地区 1階｜男女いっしょに実習",
     q: "卵や生クリームを泡立てるときに使う道具は、どれ？",
     choices: [{"i": "whisk", "t": "泡立て器"}, {"i": "ladle", "t": "おたま"}, {"i": "chopsticks", "t": "菜箸"}, {"i": "knife", "t": "包丁"}], // 先頭が正解（表示時にシャッフル）
     msg: "泡立て器は、卵や生クリームに空気を含ませてふわふわにする道具で、ケーキ作りに大活躍。カレーライスからケーキまで作る実習室で、男子も女子も一緒に作ります！ 部屋の前に、大学の資料・昨年度の入試問題・部活動案内があるので、ご自由にどうぞ。",
     talk: "ここで作ってみたい料理は何？" },
-  { id: "s3", emoji: "🖌️", name: "③ 書道室", hint: "A地区 1階",
+  { id: "s3", pos: 1, emoji: "🖌️", name: "③ 書道室", hint: "A地区 1階",
     q: "「〇〇も筆の誤り」ということわざの〇〇に入る、書の名人は誰？",
     choices: [{"t": "弘法（空海）"}, {"t": "最澄"}, {"t": "聖徳太子"}, {"t": "織田信長"}], // 先頭が正解（表示時にシャッフル）
     msg: "弘法大師（空海）は、書の名人としても有名です。書の名人でも、たまには書き間違えることがある。「名人でも失敗する」という意味のことわざです。この教室は、説明会の日は個別相談会場になっています。",
     talk: "家族の中で、いちばん字がきれいなのは誰？" },
-  { id: "s4", emoji: "💻", name: "④ 情報処理実習室", hint: "A地区 1階｜2か所あるよ",
+  { id: "s4", pos: 3, emoji: "💻", name: "④ 情報処理実習室", hint: "A地区 1階｜2か所あるよ",
     q: "パソコンの「頭脳」にあたり、計算や命令の処理をする部品は、どれ？",
     choices: [{"i": "cpu", "t": "CPU"}, {"i": "keyboard", "t": "キーボード"}, {"i": "mouse", "t": "マウス"}, {"i": "display", "t": "ディスプレイ"}], // 先頭が正解（表示時にシャッフル）
     msg: "CPU（シーピーユー）は、計算や命令の処理をするパソコンの頭脳です。難しいことも、やさしく、深く、楽しく学べる情報処理実習室。パソコンの部屋は全部で2か所あります。",
     talk: "パソコンで作ってみたいものはある？" },
-  { id: "s5", emoji: "🎵", name: "⑤ 音楽室", hint: "A地区 1階",
+  { id: "s5", pos: 3, emoji: "🎵", name: "⑤ 音楽室", hint: "A地区 1階",
     q: "「運命」や「第九」を作曲した音楽家は、誰？",
     choices: [{"t": "ベートーヴェン"}, {"t": "モーツァルト"}, {"t": "バッハ"}, {"t": "ショパン"}], // 先頭が正解（表示時にシャッフル）
     msg: "「運命」「第九」はベートーヴェンの名曲です。耳が聞こえにくくなっても作曲を続けたことで知られています。ここは音楽の授業で使う特別教室です。",
     talk: "家族それぞれの「最近よく聴く曲」を教え合ってみよう。" },
-  { id: "s6", emoji: "🎨", name: "⑥ 美術室", hint: "A地区 1階",
+  { id: "s6", pos: 1, emoji: "🎨", name: "⑥ 美術室", hint: "A地区 1階",
     q: "絵の具の黄色と青を混ぜると、何色になる？",
     choices: [{"c": "#2e9e4f", "t": "緑"}, {"c": "#7b3fa0", "t": "むらさき"}, {"c": "#f28c1c", "t": "オレンジ"}, {"c": "#f6a6c1", "t": "ピンク"}], // 先頭が正解（表示時にシャッフル）
     msg: "黄色と青を混ぜると緑になります。ほかにも、赤と青でむらさき、赤と黄でオレンジ。色を混ぜるのは、美術の授業でも大活躍です。ここは美術の授業で使う特別教室です。",
     talk: "小学校の図工で、いちばん好きだった作品は？" },
-  { id: "s7", emoji: "🥋", name: "⑦ 修道館", hint: "C地区 地下｜道場",
+  { id: "s7", pos: 4, emoji: "🥋", name: "⑦ 修道館", hint: "C地区 地下｜道場",
     q: "武道は「〇〇に始まり、〇〇に終わる」といわれます。〇〇に入る言葉は、どれ？",
     choices: [{"t": "礼"}, {"t": "技"}, {"t": "力"}, {"t": "勝ち"}], // 先頭が正解（表示時にシャッフル）
     msg: "武道は「礼に始まり、礼に終わる」といわれます。相手や道場、道具への感謝と敬意を、おじぎ（礼）で表します。ここは伝統と趣のある道場。男子は体育の授業で柔道・剣道をやります。",
     talk: "柔道と剣道、やってみたいのはどっち？" },
-  { id: "s8a", emoji: "🔭", name: "⑧ 物理・地学実験室", hint: "B地区 3階",
+  { id: "s8a", pos: 2, emoji: "🔭", name: "⑧ 物理・地学実験室", hint: "B地区 3階",
     q: "太陽系の惑星で、いちばん大きいのは、どれ？",
     choices: [{"i": "jupiter", "t": "木星"}, {"i": "saturn", "t": "土星"}, {"i": "mars", "t": "火星"}, {"i": "earth", "t": "地球"}], // 先頭が正解（表示時にシャッフル）
     msg: "いちばん大きい惑星は木星です。地球が約1300個も入る大きさだといわれています。ここは物理・地学の実験をする実験室（3階）です。",
     talk: "理科でいちばんおもしろかった実験は？" },
-  { id: "s8b", emoji: "🧪", name: "⑧ 生物・化学実験室", hint: "B地区 4階",
+  { id: "s8b", pos: 3, emoji: "🧪", name: "⑧ 生物・化学実験室", hint: "B地区 4階",
     q: "血液の成分で、体じゅうに酸素を運んでいるのは、どれ？",
     choices: [{"t": "赤血球"}, {"t": "白血球"}, {"t": "血小板"}, {"t": "血しょう"}], // 先頭が正解（表示時にシャッフル）
     msg: "酸素を運ぶのは赤血球です。赤い色は、酸素と結びつく「ヘモグロビン」のはたらきです。ここは生物・化学の実験をする実験室（4階）です。",
     talk: "調べてみたい生き物や、不思議に思うことはある？" },
-  { id: "s9", emoji: "🧘", name: "⑨ 坐禅堂", hint: "B地区 屋上",
+  { id: "s9", pos: 1, emoji: "🧘", name: "⑨ 坐禅堂", hint: "B地区 屋上",
     q: "坐禅堂にお祀りしている仏様は、どなた？",
     choices: [{"t": "文殊菩薩"}, {"t": "観音菩薩"}, {"t": "地蔵菩薩"}, {"t": "普賢菩薩"}], // 先頭が正解（表示時にシャッフル）
     msg: "坐禅堂には、文殊菩薩（もんじゅぼさつ）様をお祀りしています。「三人寄れば文殊の知恵」の文殊です。本格的に坐禅ができる施設で、校舎の屋上にあります。",
     talk: "ここで1分だけ、静かに深呼吸してみよう。" },
-  { id: "s10", emoji: "🥐", name: "⑩ 地下ホール・購買部", hint: "D地区 地下",
+  { id: "s10", pos: 4, emoji: "🥐", name: "⑩ 地下ホール・購買部", hint: "D地区 地下",
     q: "パンをふくらませるのに使われる、小さな生き物は、どれ？",
     choices: [{"t": "酵母（イースト）"}, {"t": "乳酸菌"}, {"t": "納豆菌"}, {"t": "大腸菌"}], // 先頭が正解（表示時にシャッフル）
     msg: "パンがふくらむのは、酵母（イースト）が出す二酸化炭素のおかげです。ここはパンやおにぎりなどを売っている購買部がある、地下ホールです。",
     talk: "お昼に買ってみたいのは何？" },
-  { id: "s11", emoji: "🎬", name: "⑪ 第一AV教室", hint: "D地区 2階",
+  { id: "s11", pos: 2, emoji: "🎬", name: "⑪ 第一AV教室", hint: "D地区 2階",
     q: "映画は、1秒間におよそ何枚の絵（写真）を次々に映して、動いて見せているでしょう？",
     choices: [{"t": "24枚"}, {"t": "2枚"}, {"t": "240枚"}, {"t": "2400枚"}], // 先頭が正解（表示時にシャッフル）
     msg: "映画は、1秒間に24枚（24コマ）の絵を次々に映して、動いているように見せています。パラパラ漫画と同じしくみです。ここはビデオなどを大画面で見られる教室です。",
     talk: "大画面で見てみたい映画や動画は？" },
-  { id: "s12", emoji: "📚", name: "⑫ 図書室", hint: "D地区 3階",
+  { id: "s12", pos: 3, emoji: "📚", name: "⑫ 図書室", hint: "D地区 3階",
     q: "「吾輩は猫である」を書いた作家は、誰？",
     choices: [{"t": "夏目漱石"}, {"t": "芥川龍之介"}, {"t": "太宰治"}, {"t": "宮沢賢治"}], // 先頭が正解（表示時にシャッフル）
     msg: "「吾輩は猫である」は夏目漱石のデビュー作です。ここは蔵書が約4万冊の図書室（3階）。気になる本を探してみよう。",
@@ -296,18 +305,29 @@ function setMode(reveal, fresh) {
   $("dMsg").textContent = reveal ? current.msg : "";
   $("dTalk").hidden = !reveal; $("dTalkText").textContent = reveal ? current.talk : "";
 }
+function onRight(s) { done.push(s.id); save(done); render(); setMode(true, true); celebrate(done.length); }
+function onWrong(b) { b.classList.add("wrong", "shake"); miss(); $("err").textContent = "ざんねん！ もういちど考えてみよう。"; }
+// ポスター版：選択肢は場所に貼ったポスターにあり、アプリでは番号（1〜4）だけを選ぶ。正解の番号は s.pos。
+function buildNums(s) {
+  $("choices").className = "choices nums"; $("choices").innerHTML = "";
+  [1, 2, 3, 4].forEach(n => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "choice num"; b.textContent = n; b.setAttribute("aria-label", n + "番");
+    b.onclick = () => n === s.pos ? onRight(s) : onWrong(b);
+    $("choices").appendChild(b);
+  });
+}
 function buildChoices(s) {
   $("dQ").textContent = s.q;
+  $("pnote").hidden = !posterMode; $("choices").className = "choices";
+  if (posterMode) return buildNums(s);
   const list = s.choices.map((c, i) => ({ ...c, ok: i === 0 })).sort(() => Math.random() - .5);
   $("choices").innerHTML = "";
   list.forEach(c => {
     const b = document.createElement("button");
     b.type = "button"; b.className = "choice";
     b.innerHTML = (c.i || c.e || c.c) ? `<span class="ce">${c.c ? `<span class="sw" style="background:${c.c}"></span>` : c.i ? ICONS[c.i] : c.e}</span><span class="ct">${c.t}</span>` : `<span class="ct big">${c.t}</span>`;
-    b.onclick = () => {
-      if (c.ok) { done.push(s.id); save(done); render(); setMode(true, true); celebrate(done.length); }
-      else { b.classList.add("wrong", "shake"); miss(); $("err").textContent = "ざんねん！ もういちど考えてみよう。"; }
-    };
+    b.onclick = () => c.ok ? onRight(s) : onWrong(b);
     $("choices").appendChild(b);
   });
 }
@@ -504,6 +524,10 @@ $("replay").onclick = () => grand();
 const showSnd = () => { $("snd").textContent = soundOn ? "🔊 効果音：オン" : "🔇 効果音：オフ"; $("snd").setAttribute("aria-pressed", soundOn); };
 $("snd").onclick = () => { soundOn = !soundOn; lsSet("stamp-rally-snd", soundOn ? "1" : "0"); showSnd(); tone([[784, .15]]); };
 showSnd();
+let posterMode = location.hash === "#poster" || lsGet("stamp-rally-poster") === "1";
+const showPm = () => { $("pmode").textContent = posterMode ? "🖼️ ポスター版：オン" : "🖼️ ポスター版：オフ"; $("pmode").setAttribute("aria-pressed", posterMode); };
+$("pmode").onclick = () => { posterMode = !posterMode; lsSet("stamp-rally-poster", posterMode ? "1" : "0"); showPm(); };
+showPm();
 const HITS = ["🎉 正解！", "✨ すごい！", "🌟 ナイス！", "💯 大正解！", "🎊 やったね！"];
 render();
 </script>
