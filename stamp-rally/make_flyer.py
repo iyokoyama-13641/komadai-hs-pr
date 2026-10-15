@@ -39,12 +39,12 @@ HTML = """<!doctype html>
   .note { font-size: 12pt; color: #333; line-height: 1.7; }
 </style></head><body><section class="page">
   <div class="banner"><div class="school">駒澤大学高等学校　令和8年度 学校説明会</div><h1>校内クイズ探検</h1></div>
-  <div class="lead">保護者の方といっしょに、校内の場所をめぐって<br>クイズに挑戦しよう！</div>
+  <div class="lead">保護者の方といっしょに、<br>校内の場所のクイズに挑戦しよう！</div>
   <div class="qr">__SVG__</div>
   <div class="url">__URL__</div>
   <ol>
     <li><b>1</b><span>スマホでQRコードを読み取る</span></li>
-    <li><b>2</b><span>校内に貼ってある①〜⑫の場所へ行く</span></li>
+    <li><b>2</b><span>見学した場所（①〜⑫）のクイズを選ぶ</span></li>
     <li><b>3</b><span>絵を4つの中から選んで答える</span></li>
     <li><b>4</b><span>8問でステージクリア、13問でコンプリート！</span></li>
   </ol>
