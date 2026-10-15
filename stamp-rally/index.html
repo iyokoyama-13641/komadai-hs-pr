@@ -125,6 +125,10 @@ const ICONS = {
   bench: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 46H46M12 46V58M42 46V58"/><circle cx="14" cy="38" r="4"/><path d="M19 41H40L48 48V58M27 41V22"/><path d="M12 22H42" /><path class="plate" d="M13 16V28M41 16V28"/></svg>',
   squat: '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="26" cy="11" r="4"/><path d="M26 16V22L32 38L45 42L39 57H49M12 20H42"/><path class="plate" d="M12 14V26M42 14V26"/></svg>',
   legpress: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M6 54H30M10 38L24 50"/><circle cx="8" cy="28" r="4"/><path d="M11 32L22 46L36 34L48 42"/><path class="plate" d="M50 24L54 54"/></svg>',
+  knife: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M5 30L44 24V42C30 44 14 40 5 30Z"/><path d="M44 28H60V38H44"/></svg>',
+  ladle: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M52 8L32 38"/><path d="M12 42H32A10 10 0 0 1 12 42Z"/></svg>',
+  whisk: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 58V38M32 38C18 32 18 14 32 8C46 14 46 32 32 38M32 38C26 30 26 16 32 8M32 38C38 30 38 16 32 8"/></svg>',
+  chopsticks: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M20 58L38 8M30 58L46 10"/></svg>',
   curl: '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="22" cy="10" r="4"/><path d="M22 15V38L16 58M22 38L30 58M22 20L27 32L37 23"/><path class="plate" d="M32 19L43 28"/></svg>'
 };
 // ★ スポットの編集はここだけ。q=問題、choices=絵の4択（先頭が正解）、msg=特徴メッセージ、talk=親子トーク。
@@ -135,9 +139,9 @@ const SPOTS = [
     msg: "ベンチプレスは胸、スクワットとレッグプレスは脚、アームカールは腕の筋肉を鍛えます。ジムみたいなウエイトトレーニングマシーンがずらり。部活動や授業で使います。",
     talk: "どのマシンを使ってみたい？ 親子で見つけてみよう。" },
   { id: "s2", emoji: "🍰", name: "② 調理実習室", hint: "A地区 1階｜男女いっしょに実習",
-    q: "じゃがいもやにんじんの皮をむくのに便利な道具は、どれ？",
-    choices: [{"e": "🥕", "t": "ピーラー"}, {"e": "🥄", "t": "おたま"}, {"e": "🍳", "t": "泡立て器"}, {"e": "🥢", "t": "菜箸"}], // 先頭が正解（表示時にシャッフル）
-    msg: "ピーラーは野菜の皮を薄くむける道具です。カレーライスからケーキまで作る実習室で、男子も女子も一緒に作ります！ 部屋の前に、大学の資料・昨年度の入試問題・部活動案内があるので、ご自由にどうぞ。",
+    q: "卵や生クリームを泡立てるときに使う道具は、どれ？",
+    choices: [{"i": "whisk", "t": "泡立て器"}, {"i": "ladle", "t": "おたま"}, {"i": "chopsticks", "t": "菜箸"}, {"i": "knife", "t": "包丁"}], // 先頭が正解（表示時にシャッフル）
+    msg: "泡立て器は、卵や生クリームに空気を含ませてふわふわにする道具で、ケーキ作りに大活躍。カレーライスからケーキまで作る実習室で、男子も女子も一緒に作ります！ 部屋の前に、大学の資料・昨年度の入試問題・部活動案内があるので、ご自由にどうぞ。",
     talk: "ここで作ってみたい料理は何？" },
   { id: "s3", emoji: "🖌️", name: "③ 書道室", hint: "A地区 1階",
     q: "「〇〇も筆の誤り」ということわざの〇〇に入る、書の名人は誰？",
