@@ -92,6 +92,12 @@
   .grand .btn { flex: none; padding: 12px 28px; font-size: 1.05rem; background: #ffd23f; color: #222; border-color: #ffd23f; font-weight: 700; }
   @media (prefers-reduced-motion: reduce) { .crown, .grand h2, .grand.show, .hit { animation: none; } .grand h2 { color: #ffd23f; background: none; } }
   .spark { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 40; }
+  dialog.shake-big { animation: shakeBig .6s, redflash .8s; }
+  @keyframes shakeBig { 0%, 100% { transform: translateX(0); } 10% { transform: translateX(-22px) rotate(-1.5deg); } 20% { transform: translateX(22px) rotate(1.5deg); } 30% { transform: translateX(-18px); } 40% { transform: translateX(18px); } 50% { transform: translateX(-14px); } 60% { transform: translateX(14px); } 70% { transform: translateX(-9px); } 80% { transform: translateX(9px); } 90% { transform: translateX(-4px); } }
+  @keyframes redflash { 0% { box-shadow: 0 0 0 0 transparent; } 15% { box-shadow: 0 0 0 6px #c0392b, 0 0 44px 12px #c0392b; } 100% { box-shadow: 0 0 0 0 transparent; } }
+  .miss { position: fixed; inset: 0; display: grid; place-items: center; font-size: 12rem; line-height: 1; font-weight: 900; font-family: system-ui, sans-serif; color: #c0392b; pointer-events: none; z-index: 40; animation: missPop .75s ease-out forwards; }
+  @keyframes missPop { 0% { transform: scale(.3); opacity: 0; } 25% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { dialog.shake-big, .miss { animation: none; } .miss { display: none; } }
 </style>
 </head>
 <body>
@@ -300,7 +306,7 @@ function buildChoices(s) {
     b.innerHTML = (c.i || c.e || c.c) ? `<span class="ce">${c.c ? `<span class="sw" style="background:${c.c}"></span>` : c.i ? ICONS[c.i] : c.e}</span><span class="ct">${c.t}</span>` : `<span class="ct big">${c.t}</span>`;
     b.onclick = () => {
       if (c.ok) { done.push(s.id); save(done); render(); setMode(true, true); celebrate(done.length); }
-      else { b.classList.add("wrong", "shake"); $("err").textContent = "ざんねん！ もういちど考えてみよう。"; }
+      else { b.classList.add("wrong", "shake"); miss(); $("err").textContent = "ざんねん！ もういちど考えてみよう。"; }
     };
     $("choices").appendChild(b);
   });
@@ -347,6 +353,15 @@ function burstAt(x, y, n, emojis, dist) {
     c.style.cssText = `--x0:${x}px;--y0:${y}px;--x1:${x + Math.cos(a) * d}px;--y1:${y + Math.sin(a) * d - 40}px;--r:${Math.random() * 540 - 270}deg;animation-delay:${Math.random() * .15}s`;
     ($("dlg").open ? $("dlg") : document.body).appendChild(c); setTimeout(() => c.remove(), 1400);
   }
+}
+function miss() {
+  const d = $("dlg");
+  if (!reduce) {
+    d.classList.remove("shake-big"); void d.offsetWidth; d.classList.add("shake-big");
+    const m = document.createElement("div"); m.className = "miss"; m.textContent = "×"; d.appendChild(m);
+    setTimeout(() => { m.remove(); d.classList.remove("shake-big"); }, 900);
+  }
+  tone([[246, .16], [174, .4]], .14); buzz([140, 60, 140]);
 }
 function sparkle(n, big) {
   if (reduce) return;
