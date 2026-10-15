@@ -344,6 +344,37 @@ function tone(seq, vol = .12) {
     });
   } catch {}
 }
+const noiseBuf = d => { const n = Math.floor(ac.sampleRate * d), b = ac.createBuffer(1, n, ac.sampleRate), c = b.getChannelData(0); for (let i = 0; i < n; i++) c[i] = Math.random() * 2 - 1; return b; };
+// 花火の音：打ち上げの笛 → ドーン → パチパチ。at=開始までの秒数、power=大きさ、whistle=笛を鳴らすか
+function fwSound(at = 0, power = 1, whistle = true) {
+  if (!soundOn) return;
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    const t = ac.currentTime + at, bt = t + .22;
+    if (whistle) {
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = "sine"; o.frequency.setValueAtTime(500, t); o.frequency.exponentialRampToValueAtTime(2400, bt);
+      g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(.06 * power, t + .05); g.gain.linearRampToValueAtTime(.0001, bt);
+      o.connect(g); g.connect(ac.destination); o.start(t); o.stop(bt + .02);
+    }
+    const n = ac.createBufferSource(), lp = ac.createBiquadFilter(), ng = ac.createGain();
+    n.buffer = noiseBuf(.9); lp.type = "lowpass";
+    lp.frequency.setValueAtTime(1000, bt); lp.frequency.exponentialRampToValueAtTime(120, bt + .8);
+    ng.gain.setValueAtTime(.5 * power, bt); ng.gain.exponentialRampToValueAtTime(.0001, bt + .9);
+    n.connect(lp); lp.connect(ng); ng.connect(ac.destination); n.start(bt);
+    const k = ac.createOscillator(), kg = ac.createGain();
+    k.frequency.setValueAtTime(110, bt); k.frequency.exponentialRampToValueAtTime(35, bt + .5);
+    kg.gain.setValueAtTime(.45 * power, bt); kg.gain.exponentialRampToValueAtTime(.0001, bt + .6);
+    k.connect(kg); kg.connect(ac.destination); k.start(bt); k.stop(bt + .65);
+    for (let i = 0; i < 14; i++) {
+      const ct = bt + .12 + Math.random() * .8, c = ac.createBufferSource(), hp = ac.createBiquadFilter(), cg = ac.createGain();
+      c.buffer = noiseBuf(.04); hp.type = "highpass"; hp.frequency.value = 3500;
+      cg.gain.setValueAtTime(.03 + .12 * power * Math.random(), ct); cg.gain.exponentialRampToValueAtTime(.0001, ct + .04);
+      c.connect(hp); hp.connect(cg); cg.connect(ac.destination); c.start(ct);
+    }
+  } catch {}
+}
+let fwTimer = null;
 const buzz = p => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 function burstAt(x, y, n, emojis, dist) {
   if (reduce) return;
@@ -363,7 +394,7 @@ function miss() {
   }
   tone([[246, .16], [174, .4]], .14); buzz([140, 60, 140]);
 }
-function sparkle(n, big) {
+function sparkle(n, big, delay = 220) {
   if (reduce) return;
   const host = $("dlg").open ? $("dlg") : document.body;
   const cv = document.createElement("canvas"); cv.className = "spark";
@@ -375,7 +406,7 @@ function sparkle(n, big) {
   const frame = t => {
     t0 = t0 === null ? t : t0;
     ctx.clearRect(0, 0, W, H);
-    while (fired < n && t - t0 > fired * 240) { boom(W * (.15 + Math.random() * .7), H * (.1 + Math.random() * .5)); fired++; }
+    while (fired < n && t - t0 > delay + fired * 240) { boom(W * (.15 + Math.random() * .7), H * (.1 + Math.random() * .5)); fired++; }
     for (let i = ps.length - 1; i >= 0; i--) {
       const p = ps[i]; p.x += p.vx; p.y += p.vy; p.vy += .06; p.vx *= .985; p.l -= .014;
       if (p.l <= 0) { ps.splice(i, 1); continue; }
@@ -389,13 +420,14 @@ function celebrate(count) {
   const x = innerWidth / 2, y = innerHeight * .4;
   if (count === GOAL || count >= SPOTS.length) {
     sparkle(8, true);
-    burstAt(x, y, 44, ["🎉", "⭐", "🎊", "✨", "🌟"], Math.min(innerWidth, 520) * .8);
-    tone([[523, .15], [659, .15], [784, .15], [1047, .45]]); buzz([60, 40, 60, 40, 140]);
+    setTimeout(() => burstAt(x, y, 44, ["🎉", "⭐", "🎊", "✨", "🌟"], Math.min(innerWidth, 520) * .8), 220);
+    for (let i = 0; i < 8; i++) fwSound(i * .24, 1.1, i % 3 === 0);
+    buzz([60, 40, 60, 40, 140]);
     if (count >= SPOTS.length) pendingGrand = true;
   } else {
     sparkle(4, false);
-    burstAt(x, y, 22, ["⭐", "✨", "🎉", "💮"], Math.min(innerWidth, 520) * .55);
-    tone([[659, .12], [880, .28]]); buzz(40);
+    setTimeout(() => burstAt(x, y, 22, ["⭐", "✨", "🎉", "💮"], Math.min(innerWidth, 520) * .55), 220);
+    fwSound(0, .9, true); fwSound(.5, .7, false); buzz(40);
   }
 }
 function startFireworks() {
@@ -419,11 +451,13 @@ function startFireworks() {
 }
 function grand() {
   $("grand").classList.add("show"); document.body.style.overflow = "hidden";
-  tone([[523, .18], [659, .18], [784, .18], [1047, .18], [784, .18], [1047, .6]], .14); buzz([80, 50, 80, 50, 80, 50, 300]);
+  tone([[523, .18], [659, .18], [784, .18], [1047, .18], [784, .18], [1047, .6]], .1); buzz([80, 50, 80, 50, 80, 50, 300]);
+  for (let i = 0; i < 6; i++) fwSound(i * .3, 1.2, i % 2 === 0);
+  clearInterval(fwTimer); fwTimer = setInterval(() => fwSound(0, .9, Math.random() < .5), 650);
   if (!reduce) { fwRun = true; startFireworks(); }
   $("grandClose").focus();
 }
-$("grandClose").onclick = () => { fwRun = false; $("grand").classList.remove("show"); document.body.style.overflow = ""; $("clear").scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" }); };
+$("grandClose").onclick = () => { fwRun = false; clearInterval(fwTimer); $("grand").classList.remove("show"); document.body.style.overflow = ""; $("clear").scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" }); };
 $("dlg").addEventListener("close", () => { if (pendingGrand) { pendingGrand = false; grand(); } });
 $("replay").onclick = () => grand();
 const showSnd = () => { $("snd").textContent = soundOn ? "🔊 効果音：オン" : "🔇 効果音：オフ"; $("snd").setAttribute("aria-pressed", soundOn); };
