@@ -91,6 +91,7 @@
   .grand p { margin: 8px 0 16px; line-height: 1.7; }
   .grand .btn { flex: none; padding: 12px 28px; font-size: 1.05rem; background: #ffd23f; color: #222; border-color: #ffd23f; font-weight: 700; }
   @media (prefers-reduced-motion: reduce) { .crown, .grand h2, .grand.show, .hit { animation: none; } .grand h2 { color: #ffd23f; background: none; } }
+  .spark { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 40; }
 </style>
 </head>
 <body>
@@ -343,18 +344,41 @@ function burstAt(x, y, n, emojis, dist) {
     const c = document.createElement("span"), a = Math.random() * Math.PI * 2, d = dist * (.5 + Math.random() * .7);
     c.className = "pop-p"; c.textContent = emojis[i % emojis.length];
     c.style.cssText = `--x0:${x}px;--y0:${y}px;--x1:${x + Math.cos(a) * d}px;--y1:${y + Math.sin(a) * d - 40}px;--r:${Math.random() * 540 - 270}deg;animation-delay:${Math.random() * .15}s`;
-    document.body.appendChild(c); setTimeout(() => c.remove(), 1400);
+    ($("dlg").open ? $("dlg") : document.body).appendChild(c); setTimeout(() => c.remove(), 1400);
   }
 }
+function sparkle(n, big) {
+  if (reduce) return;
+  const host = $("dlg").open ? $("dlg") : document.body;
+  const cv = document.createElement("canvas"); cv.className = "spark";
+  const dpr = Math.min(devicePixelRatio || 1, 2), W = innerWidth, H = innerHeight;
+  cv.width = W * dpr; cv.height = H * dpr; host.appendChild(cv);
+  const ctx = cv.getContext("2d"); ctx.scale(dpr, dpr);
+  const ps = []; let t0 = null, fired = 0;
+  const boom = (x, y) => { const h = Math.random() * 360; for (let i = 0; i < (big ? 120 : 90); i++) { const a = Math.random() * 6.283, v = (1.8 + Math.random() * 5.5) * (big ? 1.2 : 1); ps.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, l: 1, h }); } };
+  const frame = t => {
+    t0 = t0 === null ? t : t0;
+    ctx.clearRect(0, 0, W, H);
+    while (fired < n && t - t0 > fired * 240) { boom(W * (.15 + Math.random() * .7), H * (.1 + Math.random() * .5)); fired++; }
+    for (let i = ps.length - 1; i >= 0; i--) {
+      const p = ps[i]; p.x += p.vx; p.y += p.vy; p.vy += .06; p.vx *= .985; p.l -= .014;
+      if (p.l <= 0) { ps.splice(i, 1); continue; }
+      ctx.fillStyle = `hsla(${p.h},100%,62%,${p.l})`; ctx.beginPath(); ctx.arc(p.x, p.y, 1.5 + 2.6 * p.l, 0, 6.283); ctx.fill();
+    }
+    if (ps.length || fired < n) requestAnimationFrame(frame); else cv.remove();
+  };
+  requestAnimationFrame(frame);
+}
 function celebrate(count) {
-  const r = $("dlg").getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + 60;
+  const x = innerWidth / 2, y = innerHeight * .4;
   if (count === GOAL || count >= SPOTS.length) {
-    burstAt(x, y, 40, ["🎉", "⭐", "🎊", "✨", "🌟"], 280);
-    setTimeout(() => burstAt(innerWidth / 2, innerHeight * .3, 30, ["🎊", "💫", "🏅"], 340), 250);
+    sparkle(8, true);
+    burstAt(x, y, 44, ["🎉", "⭐", "🎊", "✨", "🌟"], Math.min(innerWidth, 520) * .8);
     tone([[523, .15], [659, .15], [784, .15], [1047, .45]]); buzz([60, 40, 60, 40, 140]);
     if (count >= SPOTS.length) pendingGrand = true;
   } else {
-    burstAt(x, y, 18, ["⭐", "✨", "🎉", "💮"], 160);
+    sparkle(4, false);
+    burstAt(x, y, 22, ["⭐", "✨", "🎉", "💮"], Math.min(innerWidth, 520) * .55);
     tone([[659, .12], [880, .28]]); buzz(40);
   }
 }
