@@ -48,7 +48,7 @@ HTML = """<!doctype html>
     <li><b>3</b><span>歩きながら、絵を4つの中から選んで答える</span></li>
     <li><b>4</b><span>8問でステージクリア、13問でコンプリート！</span></li>
   </ol>
-  <div class="note">校舎の見学では、玄関ホールで受け取る靴カバーを着けてください。<br>通信ができないときは、スタッフにお声がけください。</div>
+  <div class="note">校舎の見学では、玄関ホールで受け取る靴カバーを着けてください。</div>
 </section></body></html>
 """
 (here / "flyer.html").write_text(HTML.replace("__SVG__", svg).replace("__URL__", URL), encoding="utf8")
