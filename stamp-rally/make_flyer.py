@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """参加者向けの案内紙（QRコード入り）flyer.html を作る。
 使い方： python3 make_flyer.py [URL]
-  URL を省略すると、GitHub Pages の公開URL（ポスター版で開く #poster 付き）を使います。
+  URL を省略すると、GitHub Pages の公開URL（絵や文字を4つの中から選ぶ、ふつうのクイズ）を使います。
+  ポスター版で開きたいときは URL の末尾に ?mode=poster を付けてください。
   QRコードの作成に segno が必要です（pip install segno）。
 """
 import sys, pathlib, io, re
 import segno
 
-URL = sys.argv[1] if len(sys.argv) > 1 else "https://iyokoyama-13641.github.io/komadai-hs-pr/?mode=poster"
+URL = sys.argv[1] if len(sys.argv) > 1 else "https://iyokoyama-13641.github.io/komadai-hs-pr/"
 here = pathlib.Path(__file__).parent
 buf = io.BytesIO()
 segno.make(URL, error="m").save(buf, kind="svg", scale=1, border=2, dark="#111111", light="#ffffff", xmldecl=False, svgns=True, nl=False)
@@ -44,7 +45,7 @@ HTML = """<!doctype html>
   <ol>
     <li><b>1</b><span>スマホでQRコードを読み取る</span></li>
     <li><b>2</b><span>校内に貼ってある①〜⑫の場所へ行く</span></li>
-    <li><b>3</b><span>ポスターの絵を見て、アプリで番号を選ぶ</span></li>
+    <li><b>3</b><span>歩きながら、絵を4つの中から選んで答える</span></li>
     <li><b>4</b><span>8問でステージクリア、13問でコンプリート！</span></li>
   </ol>
   <div class="note">校舎の見学では、玄関ホールで受け取る靴カバーを着けてください。<br>通信ができないときは、スタッフにお声がけください。</div>
