@@ -35,16 +35,17 @@ HTML = """<!doctype html>
   .url { font-size: 10pt; color: #555; word-break: break-all; }
   ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 3mm; width: 100%; text-align: left; font-size: 16pt; line-height: 1.5; }
   li { display: flex; gap: 5mm; align-items: center; background: #f1f7f3; border-radius: 4mm; padding: 3mm 6mm; }
+  li small { font-size: 12pt; color: #444; }
   li b { flex: none; width: 12mm; height: 12mm; border-radius: 50%; background: #1f5a45; color: #fff; display: grid; place-items: center; font-size: 18pt; }
   .note { font-size: 12pt; color: #333; line-height: 1.7; }
 </style></head><body><section class="page">
   <div class="banner"><div class="school">駒澤大学高等学校　令和8年度 学校説明会</div><h1>校内クイズ探検</h1></div>
-  <div class="lead">保護者の方といっしょに、<br>校内の場所のクイズに挑戦しよう！</div>
+  <div class="lead">保護者の方といっしょに、<br>校内クイズをお楽しみください！</div>
   <div class="qr">__SVG__</div>
   <div class="url">__URL__</div>
   <ol>
     <li><b>1</b><span>スマホでQRコードを読み取る</span></li>
-    <li><b>2</b><span>見学した場所（①〜⑫）のクイズを選ぶ</span></li>
+    <li><b>2</b><span>好きな場所（①〜⑫）のクイズを選ぶ<br><small>見学していない場所のクイズにも答えられます</small></span></li>
     <li><b>3</b><span>絵を4つの中から選んで答える</span></li>
     <li><b>4</b><span>8問でステージクリア、13問でコンプリート！</span></li>
   </ol>
