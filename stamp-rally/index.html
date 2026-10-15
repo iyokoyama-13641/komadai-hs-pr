@@ -70,6 +70,7 @@
   @media (prefers-reduced-motion: reduce) { .shake { animation: none; } }
   .choice .ce svg { width: 56px; height: 56px; stroke: currentColor; fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
   .choice .ce svg .plate { stroke-width: 5; }
+  .choice .ct.big { font-size: 1.05rem; font-weight: 700; color: var(--ink); padding: 14px 0; }
 </style>
 </head>
 <body>
@@ -129,6 +130,18 @@ const ICONS = {
   ladle: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M52 8L32 38"/><path d="M12 42H32A10 10 0 0 1 12 42Z"/></svg>',
   whisk: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 58V38M32 38C18 32 18 14 32 8C46 14 46 32 32 38M32 38C26 30 26 16 32 8M32 38C38 30 38 16 32 8"/></svg>',
   chopsticks: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M20 58L38 8M30 58L46 10"/></svg>',
+  shinai: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M10 56L52 10"/><circle cx="18" cy="47" r="4"/><path d="M45 18L49 22"/></svg>',
+  umbrella: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M6 34C6 14 58 14 58 34Z"/><path d="M32 34V52C32 58 24 58 24 52"/></svg>',
+  bat: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M10.6 50.6L34.6 26.6L46.5 10.5L52.5 4.5L59.5 11.5L53.5 17.5L37.4 29.4L13.4 53.4Z"/><circle cx="10" cy="54" r="3"/></svg>',
+  broom: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 6V34"/><path d="M22 58L26 34H38L42 58Z"/><path d="M30 40V58M34 40V58"/></svg>',
+  projector: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M6 26H46V50H6Z"/><circle cx="54" cy="38" r="5"/><circle cx="26" cy="38" r="7"/></svg>',
+  stapler: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M6 46H58V52H6Z"/><path d="M8 46L12 32H52V46"/><path d="M40 52V58"/></svg>',
+  shredder: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M10 18H54V38H10Z"/><path d="M18 26H46M16 38V58M24 38V58M32 38V58M40 38V58M48 38V58"/></svg>',
+  calc: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M16 6H48V58H16Z"/><path d="M22 12H42V22H22Z"/><path d="M24 32h.1M32 32h.1M40 32h.1M24 42h.1M32 42h.1M40 42h.1M24 52h.1M32 52h.1M40 52h.1"/></svg>',
+  cpu: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M20 20H44V44H20Z"/><path d="M28 28H36V36H28Z"/><path d="M26 14V20M32 14V20M38 14V20M26 44V50M32 44V50M38 44V50M14 26H20M14 32H20M14 38H20M44 26H50M44 32H50M44 38H50"/></svg>',
+  keyboard: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M6 20H58V46H6Z"/><path d="M14 28h.1M22 28h.1M30 28h.1M38 28h.1M46 28h.1M14 36h.1M46 36h.1M22 38H38"/></svg>',
+  mouse: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M22 26C22 8 42 8 42 26V42C42 56 22 56 22 42Z"/><path d="M32 10V28M22 28H42"/></svg>',
+  display: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 10H56V42H8Z"/><path d="M32 42V52M20 54H44"/></svg>',
   curl: '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="22" cy="10" r="4"/><path d="M22 15V38L16 58M22 38L30 58M22 20L27 32L37 23"/><path class="plate" d="M32 19L43 28"/></svg>'
 };
 // ★ スポットの編集はここだけ。q=問題、choices=絵の4択（先頭が正解）、msg=特徴メッセージ、talk=親子トーク。
@@ -145,17 +158,17 @@ const SPOTS = [
     talk: "ここで作ってみたい料理は何？" },
   { id: "s3", emoji: "🖌️", name: "③ 書道室", hint: "A地区 1階",
     q: "「〇〇も筆の誤り」ということわざの〇〇に入る、書の名人は誰？",
-    choices: [{"e": "🖌️", "t": "弘法（空海）"}, {"e": "📜", "t": "最澄"}, {"e": "👑", "t": "聖徳太子"}, {"e": "⚔️", "t": "織田信長"}], // 先頭が正解（表示時にシャッフル）
+    choices: [{"t": "弘法（空海）"}, {"t": "最澄"}, {"t": "聖徳太子"}, {"t": "織田信長"}], // 先頭が正解（表示時にシャッフル）
     msg: "弘法大師（空海）は、書の名人としても有名です。書の名人でも、たまには書き間違えることがある。「名人でも失敗する」という意味のことわざです。この教室は、説明会の日は個別相談会場になっています。",
     talk: "家族の中で、いちばん字がきれいなのは誰？" },
   { id: "s4", emoji: "💻", name: "④ 情報処理実習室", hint: "A地区 1階｜2か所あるよ",
     q: "パソコンの「頭脳」にあたり、計算や命令の処理をする部品は、どれ？",
-    choices: [{"e": "🧠", "t": "CPU"}, {"e": "⌨️", "t": "キーボード"}, {"e": "🖱️", "t": "マウス"}, {"e": "🖥️", "t": "ディスプレイ"}], // 先頭が正解（表示時にシャッフル）
+    choices: [{"i": "cpu", "t": "CPU"}, {"i": "keyboard", "t": "キーボード"}, {"i": "mouse", "t": "マウス"}, {"i": "display", "t": "ディスプレイ"}], // 先頭が正解（表示時にシャッフル）
     msg: "CPU（シーピーユー）は、計算や命令の処理をするパソコンの頭脳です。難しいことも、やさしく、深く、楽しく学べる情報処理実習室。パソコンの部屋は全部で2か所あります。",
     talk: "パソコンで作ってみたいものはある？" },
   { id: "s5", emoji: "🎵", name: "⑤ 音楽室", hint: "A地区 1階",
     q: "「運命」や「第九」を作曲した音楽家は、誰？",
-    choices: [{"e": "🎼", "t": "ベートーヴェン"}, {"e": "🎹", "t": "モーツァルト"}, {"e": "🎻", "t": "バッハ"}, {"e": "🎶", "t": "ショパン"}], // 先頭が正解（表示時にシャッフル）
+    choices: [{"t": "ベートーヴェン"}, {"t": "モーツァルト"}, {"t": "バッハ"}, {"t": "ショパン"}], // 先頭が正解（表示時にシャッフル）
     msg: "「運命」「第九」はベートーヴェンの名曲です。耳が聞こえにくくなっても作曲を続けたことで知られています。ここは音楽の授業で使う特別教室です。",
     talk: "家族それぞれの「最近よく聴く曲」を教え合ってみよう。" },
   { id: "s6", emoji: "🎨", name: "⑥ 美術室", hint: "A地区 1階",
@@ -165,7 +178,7 @@ const SPOTS = [
     talk: "小学校の図工で、いちばん好きだった作品は？" },
   { id: "s7", emoji: "🥋", name: "⑦ 修道館", hint: "C地区 地下｜道場",
     q: "剣道の試合で使う、竹でできた刀の名前は、どれ？",
-    choices: [{"e": "🎋", "t": "竹刀（しない）"}, {"e": "🪵", "t": "木刀"}, {"e": "☂️", "t": "かさ"}, {"e": "🏏", "t": "バット"}], // 先頭が正解（表示時にシャッフル）
+    choices: [{"i": "shinai", "t": "竹刀（しない）"}, {"i": "umbrella", "t": "かさ"}, {"i": "bat", "t": "バット"}, {"i": "broom", "t": "ほうき"}], // 先頭が正解（表示時にシャッフル）
     msg: "竹刀（しない）は、剣道で使う竹でできた道具です。ここは伝統と趣のある道場。男子は体育の授業で柔道・剣道をやります。",
     talk: "柔道と剣道、やってみたいのはどっち？" },
   { id: "s8a", emoji: "🔭", name: "⑧ 物理・地学実験室", hint: "B地区 3階",
@@ -175,27 +188,27 @@ const SPOTS = [
     talk: "理科でいちばんおもしろかった実験は？" },
   { id: "s8b", emoji: "🧪", name: "⑧ 生物・化学実験室", hint: "B地区 4階",
     q: "血液の成分で、体じゅうに酸素を運んでいるのは、どれ？",
-    choices: [{"e": "🩸", "t": "赤血球"}, {"e": "🛡️", "t": "白血球"}, {"e": "🩹", "t": "血小板"}, {"e": "💧", "t": "血しょう"}], // 先頭が正解（表示時にシャッフル）
+    choices: [{"t": "赤血球"}, {"t": "白血球"}, {"t": "血小板"}, {"t": "血しょう"}], // 先頭が正解（表示時にシャッフル）
     msg: "酸素を運ぶのは赤血球です。赤い色は、酸素と結びつく「ヘモグロビン」のはたらきです。ここは生物・化学の実験をする実験室（4階）です。",
     talk: "調べてみたい生き物や、不思議に思うことはある？" },
   { id: "s9", emoji: "🧘", name: "⑨ 坐禅堂", hint: "B地区 屋上",
     q: "坐禅堂にお祀りしている仏様は、どなた？",
-    choices: [{"e": "🙏", "t": "文殊菩薩"}, {"e": "🙏", "t": "観音菩薩"}, {"e": "🙏", "t": "地蔵菩薩"}, {"e": "🙏", "t": "普賢菩薩"}], // 先頭が正解（表示時にシャッフル）
+    choices: [{"t": "文殊菩薩"}, {"t": "観音菩薩"}, {"t": "地蔵菩薩"}, {"t": "普賢菩薩"}], // 先頭が正解（表示時にシャッフル）
     msg: "坐禅堂には、文殊菩薩（もんじゅぼさつ）様をお祀りしています。「三人寄れば文殊の知恵」の文殊です。本格的に坐禅ができる施設で、校舎の屋上にあります。",
     talk: "ここで1分だけ、静かに深呼吸してみよう。" },
   { id: "s10", emoji: "🥐", name: "⑩ 地下ホール・購買部", hint: "D地区 地下",
     q: "パンをふくらませるのに使われる、小さな生き物は、どれ？",
-    choices: [{"e": "🍞", "t": "酵母（イースト）"}, {"e": "🥛", "t": "乳酸菌"}, {"e": "🫘", "t": "納豆菌"}, {"e": "🦠", "t": "大腸菌"}], // 先頭が正解（表示時にシャッフル）
+    choices: [{"t": "酵母（イースト）"}, {"t": "乳酸菌"}, {"t": "納豆菌"}, {"t": "大腸菌"}], // 先頭が正解（表示時にシャッフル）
     msg: "パンがふくらむのは、酵母（イースト）が出す二酸化炭素のおかげです。ここはパンやおにぎりなどを売っている購買部がある、地下ホールです。",
     talk: "お昼に買ってみたいのは何？" },
   { id: "s11", emoji: "🎬", name: "⑪ 第一AV教室", hint: "D地区 2階",
     q: "大きなスクリーンに映像を映す機械は、どれ？",
-    choices: [{"e": "📽️", "t": "プロジェクター"}, {"e": "📎", "t": "ホッチキス"}, {"e": "🗑️", "t": "シュレッダー"}, {"e": "🧮", "t": "電卓"}], // 先頭が正解（表示時にシャッフル）
+    choices: [{"i": "projector", "t": "プロジェクター"}, {"i": "stapler", "t": "ホッチキス"}, {"i": "shredder", "t": "シュレッダー"}, {"i": "calc", "t": "電卓"}], // 先頭が正解（表示時にシャッフル）
     msg: "プロジェクターは、映像をスクリーンに大きく映します。ここはビデオなどを大画面で見られる教室です。",
     talk: "大画面で見てみたい映画や動画は？" },
   { id: "s12", emoji: "📚", name: "⑫ 図書室", hint: "D地区 3階",
     q: "「吾輩は猫である」を書いた作家は、誰？",
-    choices: [{"e": "📚", "t": "夏目漱石"}, {"e": "🚃", "t": "芥川龍之介"}, {"e": "🍎", "t": "太宰治"}, {"e": "🌌", "t": "宮沢賢治"}], // 先頭が正解（表示時にシャッフル）
+    choices: [{"t": "夏目漱石"}, {"t": "芥川龍之介"}, {"t": "太宰治"}, {"t": "宮沢賢治"}], // 先頭が正解（表示時にシャッフル）
     msg: "「吾輩は猫である」は夏目漱石のデビュー作です。ここは蔵書が約4万冊の図書室（3階）。気になる本を探してみよう。",
     talk: "最近読んだ本で、いちばんおもしろかったのは？" },
 ];
@@ -252,7 +265,7 @@ function buildChoices(s) {
   list.forEach(c => {
     const b = document.createElement("button");
     b.type = "button"; b.className = "choice";
-    b.innerHTML = `<span class="ce">${c.i ? ICONS[c.i] : c.e}</span><span class="ct">${c.t}</span>`;
+    b.innerHTML = (c.i || c.e) ? `<span class="ce">${c.i ? ICONS[c.i] : c.e}</span><span class="ct">${c.t}</span>` : `<span class="ct big">${c.t}</span>`;
     b.onclick = () => {
       if (c.ok) { done.push(s.id); save(done); render(); setMode(true); if (done.length === GOAL) burst(); }
       else { b.classList.add("wrong", "shake"); $("err").textContent = "ざんねん！ もういちど考えてみよう。"; }
