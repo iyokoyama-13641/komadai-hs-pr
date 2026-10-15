@@ -121,7 +121,7 @@ function render() {
     b.onclick = () => open(s);
     $("grid").appendChild(b);
   });
-  $("count").textContent = done.length;
+  $("count").textContent = Math.min(done.length, GOAL);
   $("fill").style.width = (Math.min(done.length / GOAL, 1) * 100) + "%";
   $("clear").classList.toggle("show", done.length >= GOAL);
 }
