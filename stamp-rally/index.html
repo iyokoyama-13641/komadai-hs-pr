@@ -39,29 +39,48 @@
   button.btn { flex: 1; font: inherit; padding: 10px; border-radius: 10px; border: 1px solid var(--line);
     background: var(--card); color: var(--ink); cursor: pointer; }
   button.btn.primary { background: var(--main); color: #fff; border-color: var(--main); }
-  .msg { background: var(--bg); border-radius: 10px; padding: 12px; margin: 12px 0; font-size: .95rem; line-height: 1.6; }
   .err { color: #c0392b; font-size: .85rem; min-height: 1.2em; margin: 0; }
   .clear { display: none; background: var(--accent); color: #222; border-radius: 14px; padding: 18px; text-align: center; margin-bottom: 16px; }
   .clear.show { display: block; animation: pop .5s; }
   .clear strong { font-size: 1.2rem; }
   .reset { margin-top: 24px; text-align: center; }
   .reset button { background: none; border: none; color: var(--sub); text-decoration: underline; font: inherit; font-size: .8rem; }
+  .msg { margin: 12px 0 8px; }
+  .talk { margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; border: 1px dashed var(--accent); font-size: .9rem; }
+  .talk b { display: block; font-size: .75rem; color: var(--sub); margin-bottom: 2px; }
+  .rank { margin-top: 10px; font-weight: 700; color: var(--main); }
+  .cert { background: var(--card); color: var(--ink); border: 3px double var(--accent); border-radius: 12px; padding: 14px 10px; margin: 12px 0 8px; }
+  .cert-s { font-size: .75rem; color: var(--sub); }
+  .cert-t { font-size: 1.3rem; font-weight: 800; margin: 2px 0 6px; }
+  .cert input { font-size: 1.1rem; margin: 4px 0; }
+  .cert-d { font-size: .85rem; color: var(--sub); }
+  .clear .note { font-size: .8rem; margin: 6px 0 0; }
+  .confetti { position: fixed; top: -2rem; font-size: 1.6rem; pointer-events: none; animation: fall 2.2s ease-in forwards; z-index: 10; }
+  @keyframes fall { to { transform: translateY(110vh) rotate(360deg); opacity: .8; } }
+  @media (prefers-reduced-motion: reduce) { .confetti { display: none; } }
 </style>
 </head>
 <body>
 <main>
   <h1>🏫 校内スタンプラリー</h1>
   <p class="lead" style="margin-bottom:2px">令和8年度 学校説明会｜駒澤大学高等学校</p>
-  <p class="lead">校内に貼ってある番号①〜⑫の場所を回って、掲示してある「合言葉」を入力しよう！<br>靴カバーを着けて見学してね。</p>
+  <p class="lead">保護者の方といっしょに、校内に貼ってある番号①〜⑫の場所を回ろう。<br>掲示の「合言葉」を入力するとスタンプ獲得！ 場所ごとの「親子トーク」も試してみてね。<br>靴カバーを着けて見学してください。</p>
 
   <div class="clear" id="clear">
-    <strong>🎉 コンプリート！</strong><br>
-    この画面を受付の先生・スタッフに見せてください。景品をお渡しします。
+    <strong>🎉 コンプリート！</strong>
+    <div class="cert">
+      <div class="cert-s">駒澤大学高等学校 学校説明会</div>
+      <div class="cert-t">校内探検 認定証</div>
+      <input id="nick" placeholder="ニックネームを入力" maxlength="12" autocomplete="off">
+      <div class="cert-d" id="certDate"></div>
+    </div>
+    <p class="note">スクリーンショットで保存して、おうちで見返してね。</p>
   </div>
 
   <section class="progress">
     <div><strong id="count">0</strong> / <span id="total"></span> 個で完成（全<span id="all"></span>か所）</div>
     <div class="bar"><div id="fill"></div></div>
+    <div class="rank" id="rank"></div>
   </section>
 
   <section class="grid" id="grid"></section>
@@ -75,6 +94,7 @@
     <strong id="dName"></strong>
     <p class="lead" id="dHint" style="margin:4px 0 0"></p>
     <p class="msg" id="dMsg" hidden></p>
+    <p class="talk" id="dTalk" hidden><b>👨‍👩‍👧 親子トーク</b><span id="dTalkText"></span></p>
     <div id="askBox">
       <input id="code" autocomplete="off" placeholder="合言葉を入力" inputmode="text">
       <p class="err" id="err"></p>
@@ -89,23 +109,35 @@
 <script>
 // ★ スポットの編集はここだけ。code が各場所に掲示する合言葉です（ひらがな・数字可）。
 const SPOTS = [
-  { id: "s1",  emoji: "🏋️", name: "① トレーニングルーム", hint: "A地区 1階｜ジムなみのマシンがあるよ", code: "きんにく", msg: "ジムなみにウエイトトレーニングマシーンを設置。部活動や授業等で使用します。" },
-  { id: "s2",  emoji: "🍰", name: "② 調理実習室",       hint: "A地区 1階｜ケーキも作る男女共修",     code: "ケーキ", msg: "ちらし寿司からケーキまで、楽しく男女共修で実習を行っています。調理室の前に、駒澤大学の資料・昨年度の入試問題・部活動案内があります。ご自由にお取りください。" },
-  { id: "s3",  emoji: "🖌️", name: "③ 書道室",           hint: "A地区 1階",                           code: "すみ", msg: "書道室です。説明会の日は個別相談会場になっています。" },
-  { id: "s4",  emoji: "💻", name: "④ 情報処理実習室",   hint: "A地区 1階｜難しいことを楽しく学ぶ",   code: "ぱそこん", msg: "難しいことを、易しく深く楽しく学べます。情報処理実習室は2か所あります。" },
-  { id: "s5",  emoji: "🎵", name: "⑤ 音楽室",           hint: "A地区 1階",                           code: "おんぷ", msg: "音楽室です。授業で使う特別教室のひとつです。" },
-  { id: "s6",  emoji: "🎨", name: "⑥ 美術室",           hint: "A地区 1階",                           code: "えのぐ", msg: "美術室です。授業で使う特別教室のひとつです。" },
-  { id: "s7",  emoji: "🥋", name: "⑦ 修道館",           hint: "C地区 地下｜柔道・剣道の道場",         code: "いっぽん", msg: "伝統と趣のある道場です。男子は体育で柔道・剣道を行います。" },
-  { id: "s8a", emoji: "🔭", name: "⑧ 物理・地学実験室", hint: "B地区 3階",                           code: "ほし", msg: "物理・地学の実験を行う実験室です。3階にあります。" },
-  { id: "s8b", emoji: "🧪", name: "⑧ 生物・化学実験室", hint: "B地区 4階",                           code: "じっけん", msg: "生物・化学の実験を行う実験室です。4階にあります。" },
-  { id: "s9",  emoji: "🧘", name: "⑨ 坐禅堂",           hint: "B地区 屋上｜本格的な坐禅ができる",     code: "ざぜん", msg: "本格的な坐禅ができる施設です。" },
-  { id: "s10", emoji: "🥐", name: "⑩ 地下ホール・購買部", hint: "D地区 地下｜パン・おにぎり",         code: "ぱん", msg: "パン・おにぎりなどを販売する購買部があります。" },
-  { id: "s11", emoji: "🎬", name: "⑪ 第一AV教室",       hint: "D地区 2階｜大画面でビデオ",           code: "えいが", msg: "ビデオなどを大画面で見られる教室です。" },
-  { id: "s12", emoji: "📚", name: "⑫ 図書室",           hint: "D地区 3階｜蔵書は約4万冊",           code: "ほん", msg: "蔵書は約4万冊。本好きにはうれしい図書室です。" },
+  { id: "s1",  emoji: "🏋️", name: "① トレーニングルーム", hint: "A地区 1階｜ジムなみのマシンがあるよ", code: "きんにく", msg: "ジムみたいなウエイトトレーニングマシーンがずらり。部活動や授業で使います。", talk: "どのマシンを使ってみたい？ 親子で見つけてみよう。" },
+  { id: "s2",  emoji: "🍰", name: "② 調理実習室",       hint: "A地区 1階｜ケーキも作る男女共修",     code: "ケーキ", msg: "ちらし寿司からケーキまで作る実習室。男子も女子も一緒に作ります！ 部屋の前に、大学の資料・昨年度の入試問題・部活動案内があるので、ご自由にどうぞ。", talk: "ここで作ってみたい料理は何？" },
+  { id: "s3",  emoji: "🖌️", name: "③ 書道室",           hint: "A地区 1階",                           code: "すみ", msg: "書道室です。この日は個別相談会場になっています。", talk: "家族の中で、いちばん字がきれいなのは誰？" },
+  { id: "s4",  emoji: "💻", name: "④ 情報処理実習室",   hint: "A地区 1階｜難しいことを楽しく学ぶ",   code: "ぱそこん", msg: "難しいことも、やさしく、深く、楽しく学べる情報処理実習室。パソコンの部屋は全部で2か所あります。", talk: "パソコンで作ってみたいものはある？" },
+  { id: "s5",  emoji: "🎵", name: "⑤ 音楽室",           hint: "A地区 1階",                           code: "おんぷ", msg: "音楽の授業で使う特別教室です。", talk: "家族それぞれの「最近よく聴く曲」を教え合ってみよう。" },
+  { id: "s6",  emoji: "🎨", name: "⑥ 美術室",           hint: "A地区 1階",                           code: "えのぐ", msg: "美術の授業で使う特別教室です。", talk: "小学校の図工で、いちばん好きだった作品は？" },
+  { id: "s7",  emoji: "🥋", name: "⑦ 修道館",           hint: "C地区 地下｜柔道・剣道の道場",         code: "いっぽん", msg: "伝統と趣のある道場。男子は体育の授業で柔道・剣道をやります。", talk: "柔道と剣道、やってみたいのはどっち？" },
+  { id: "s8a", emoji: "🔭", name: "⑧ 物理・地学実験室", hint: "B地区 3階",                           code: "ほし", msg: "物理・地学の実験をする実験室（3階）。", talk: "理科でいちばんおもしろかった実験は？" },
+  { id: "s8b", emoji: "🧪", name: "⑧ 生物・化学実験室", hint: "B地区 4階",                           code: "じっけん", msg: "生物・化学の実験をする実験室（4階）。", talk: "調べてみたい生き物や、不思議に思うことはある？" },
+  { id: "s9",  emoji: "🧘", name: "⑨ 坐禅堂",           hint: "B地区 屋上｜本格的な坐禅ができる",     code: "ざぜん", msg: "本格的に坐禅ができる施設。校舎の屋上にあります。", talk: "ここで1分だけ、静かに深呼吸してみよう。" },
+  { id: "s10", emoji: "🥐", name: "⑩ 地下ホール・購買部", hint: "D地区 地下｜パン・おにぎり",         code: "ぱん", msg: "パンやおにぎりなどを売っている購買部がある、地下ホール。", talk: "お昼に買ってみたいのは何？" },
+  { id: "s11", emoji: "🎬", name: "⑪ 第一AV教室",       hint: "D地区 2階｜大画面でビデオ",           code: "えいが", msg: "ビデオなどを大画面で見られる教室です。", talk: "大画面で見てみたい映画や動画は？" },
+  { id: "s12", emoji: "📚", name: "⑫ 図書室",           hint: "D地区 3階｜蔵書は約4万冊",           code: "ほん", msg: "蔵書は約4万冊の図書室（3階）。", talk: "最近読んだ本で、いちばんおもしろかったのは？" },
 ];
 // 何個集めたらコンプリートにするか（全部なら SPOTS.length）
 const GOAL = 8;
-const KEY = "stamp-rally-v1";
+const RANKS = [[0, "これから出発！"], [1, "🥾 見習い探検隊"], [3, "🧭 探検隊員"], [5, "🔦 ベテラン隊員"], [GOAL, "🏅 校内マスター"], [SPOTS.length, "👑 全スポット制覇！"]];
+const rankOf = n => RANKS.filter(r => n >= r[0]).pop()[1];
+const KEY = "stamp-rally-v1", NKEY = "stamp-rally-nick";
+const lsGet = k => { try { return localStorage.getItem(k) || ""; } catch { return ""; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+function burst() {
+  for (let i = 0; i < 28; i++) {
+    const c = document.createElement("span");
+    c.className = "confetti"; c.textContent = ["🎉", "⭐", "🎊", "✨"][i % 4];
+    c.style.left = Math.random() * 95 + "vw"; c.style.animationDelay = Math.random() * .6 + "s";
+    document.body.appendChild(c); setTimeout(() => c.remove(), 3200);
+  }
+}
 const norm = s => s.trim().normalize("NFKC").toLowerCase();
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; } };
 const save = d => { try { localStorage.setItem(KEY, JSON.stringify(d)); } catch {} };
@@ -128,6 +160,7 @@ function render() {
   $("count").textContent = Math.min(done.length, GOAL);
   $("fill").style.width = (Math.min(done.length / GOAL, 1) * 100) + "%";
   $("clear").classList.toggle("show", done.length >= GOAL);
+  $("rank").textContent = "称号：" + rankOf(done.length);
 }
 
 function setMode(reveal) {
@@ -135,6 +168,7 @@ function setMode(reveal) {
   $("submitBtn").textContent = reveal ? "OK" : "スタンプをもらう";
   $("cancel").hidden = reveal;
   $("dMsg").textContent = reveal ? current.msg : "";
+  $("dTalk").hidden = !reveal; $("dTalkText").textContent = reveal ? current.talk : "";
 }
 function open(s) {
   current = s;
@@ -150,6 +184,7 @@ $("form").addEventListener("submit", e => {
   if ($("askBox").hidden) { $("dlg").close(); return; }
   if (norm($("code").value) === norm(current.code)) {
     done.push(current.id); save(done); render(); setMode(true);
+    if (done.length === GOAL) burst();
   } else {
     $("err").textContent = "合言葉が違います。掲示を確認してね！";
   }
@@ -157,6 +192,9 @@ $("form").addEventListener("submit", e => {
 $("cancel").onclick = () => $("dlg").close();
 $("reset").onclick = () => { if (confirm("獲得したスタンプをすべて消します。よろしいですか？")) { done = []; save(done); render(); } };
 
+$("certDate").textContent = new Date().toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" }) + " 認定";
+$("nick").value = lsGet(NKEY);
+$("nick").addEventListener("input", () => lsSet(NKEY, $("nick").value));
 render();
 </script>
 </body>
