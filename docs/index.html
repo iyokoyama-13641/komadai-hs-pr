@@ -109,6 +109,9 @@
   .hero-t { position: absolute; left: 14px; right: 14px; bottom: 12px; z-index: 1; color: #fff; text-shadow: 0 1px 6px rgba(0, 0, 0, .55); }
   .hero-t small { display: block; font-size: .8rem; letter-spacing: .05em; }
   .hero-t h1 { margin: 2px 0 0; font-size: 1.7rem; color: #fff; }
+  .bar { position: relative; }
+  .bar .mark { position: absolute; top: 0; bottom: 0; width: 3px; background: var(--ink); opacity: .55; }
+  .stage { margin-top: 8px; font-weight: 700; color: var(--main); }
 </style>
 </head>
 <body>
@@ -120,10 +123,10 @@
   <p class="lead">保護者の方といっしょに、校内に貼ってある番号①〜⑫の場所を回りながらクイズに挑戦！<br>絵を4つの中から選ぼう。その場所で実際に見ながら答えると、もっと楽しいよ。<br>靴カバーを着けて見学してください。</p>
 
   <div class="clear" id="clear">
-    <strong>🎉 コンプリート！</strong>
+    <strong id="clearTitle">🏅 ステージクリア！</strong>
     <div class="cert">
-      <div class="cert-s">駒澤大学高等学校 学校説明会</div>
-      <div class="cert-t">校内探検 認定証</div>
+      <div class="cert-s">駒澤大学高等学校 学校説明会｜校内クイズ探検</div>
+      <div class="cert-t" id="certT">ステージクリア認定証</div>
       <input id="nick" placeholder="ニックネームを入力" maxlength="12" autocomplete="off">
       <div class="cert-d" id="certDate"></div>
     </div>
@@ -137,8 +140,9 @@
   </div>
 
   <section class="progress">
-    <div><strong id="count">0</strong> / <span id="total"></span> 問正解で完成（全<span id="all"></span>問）</div>
-    <div class="bar"><div id="fill"></div></div>
+    <div><strong id="count">0</strong> / <span id="all"></span> 問正解</div>
+    <div class="bar"><div id="fill"></div><div class="mark" id="mark" title="ステージクリア"></div></div>
+    <div class="stage" id="stage"></div>
     <div class="rank" id="rank"></div>
   </section>
 
@@ -172,7 +176,7 @@
   <canvas id="fw"></canvas>
   <div class="grand-in">
     <div class="crown">👑</div>
-    <h2>全スポット制覇！</h2>
+    <h2>コンプリート！</h2>
     <p>校内クイズ探検 コンプリート！<br>すべての問題に正解しました。<br>あなたは、まさに校内マスターです。</p>
     <button class="btn" id="grandClose">認定証を見る</button>
   </div>
@@ -276,7 +280,7 @@ const SPOTS = [
     msg: "「吾輩は猫である」は夏目漱石のデビュー作です。ここは蔵書が約4万冊の図書室（3階）。気になる本を探してみよう。",
     talk: "最近読んだ本で、いちばんおもしろかったのは？" },
 ];
-// 何個集めたらコンプリートにするか（全部なら SPOTS.length）
+// ステージクリアに必要な正解数（全問正解でコンプリート）
 const GOAL = 8;
 const RANKS = [[0, "これから出発！"], [1, "🥾 見習い探検隊"], [3, "🧭 探検隊員"], [5, "🔦 ベテラン隊員"], [GOAL, "🏅 校内マスター"], [SPOTS.length, "👑 全スポット制覇！"]];
 const rankOf = n => RANKS.filter(r => n >= r[0]).pop()[1];
@@ -289,7 +293,7 @@ let done = load();
 let current = null;
 
 const $ = id => document.getElementById(id);
-$("total").textContent = GOAL; $("all").textContent = SPOTS.length;
+$("all").textContent = SPOTS.length; $("mark").style.left = (GOAL / SPOTS.length * 100) + "%";
 
 function render() {
   $("grid").innerHTML = "";
@@ -301,9 +305,14 @@ function render() {
     b.onclick = () => open(s);
     $("grid").appendChild(b);
   });
-  $("count").textContent = Math.min(done.length, GOAL);
-  $("fill").style.width = (Math.min(done.length / GOAL, 1) * 100) + "%";
-  $("clear").classList.toggle("show", done.length >= GOAL);
+  const n = done.length;
+  $("count").textContent = n;
+  $("fill").style.width = (Math.min(n / SPOTS.length, 1) * 100) + "%";
+  $("stage").textContent = n >= SPOTS.length ? "👑 コンプリート！" : n >= GOAL ? "🏅 ステージクリア！ コンプリートまで あと" + (SPOTS.length - n) + "問" : "ステージクリアまで あと" + (GOAL - n) + "問";
+  $("clear").classList.toggle("show", n >= GOAL);
+  $("clearTitle").textContent = n >= SPOTS.length ? "👑 コンプリート！" : "🏅 ステージクリア！";
+  $("certT").textContent = n >= SPOTS.length ? "コンプリート認定証" : "ステージクリア認定証";
+  $("replay").hidden = n < SPOTS.length;
   $("rank").textContent = "称号：" + rankOf(done.length);
 }
 
@@ -315,7 +324,12 @@ function setMode(reveal, fresh) {
   $("dMsg").textContent = reveal ? current.msg : "";
   $("dTalk").hidden = !reveal; $("dTalkText").textContent = reveal ? current.talk : "";
 }
-function onRight(s) { done.push(s.id); save(done); render(); setMode(true, true); celebrate(done.length); }
+function onRight(s) {
+  done.push(s.id); save(done); render(); setMode(true, true);
+  if (done.length >= SPOTS.length) $("hit").textContent = "👑 コンプリート！";
+  else if (done.length === GOAL) $("hit").textContent = "🏅 ステージクリア！";
+  celebrate(done.length);
+}
 function onWrong(b) { b.classList.add("wrong", "shake"); miss(); $("err").textContent = "ざんねん！ もういちど考えてみよう。"; }
 // ポスター版：選択肢は場所に貼ったポスターにあり、アプリでは番号（1〜4）だけを選ぶ。正解の番号は s.pos。
 function buildNums(s) {
