@@ -58,13 +58,23 @@
   .confetti { position: fixed; top: -2rem; font-size: 1.6rem; pointer-events: none; animation: fall 2.2s ease-in forwards; z-index: 10; }
   @keyframes fall { to { transform: translateY(110vh) rotate(360deg); opacity: .8; } }
   @media (prefers-reduced-motion: reduce) { .confetti { display: none; } }
+  .q { font-weight: 700; margin: 10px 0 6px; }
+  .choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .choice { font: inherit; color: inherit; background: var(--bg); border: 2px solid var(--line); border-radius: 12px; padding: 10px 6px; cursor: pointer; text-align: center; }
+  .choice .ce { font-size: 2.2rem; display: block; line-height: 1.2; }
+  .choice .ct { font-size: .8rem; color: var(--sub); }
+  .choice:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .choice.wrong { opacity: .4; border-style: dashed; }
+  .shake { animation: shake .3s; }
+  @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+  @media (prefers-reduced-motion: reduce) { .shake { animation: none; } }
 </style>
 </head>
 <body>
 <main>
   <h1>🏫 校内スタンプラリー</h1>
   <p class="lead" style="margin-bottom:2px">令和8年度 学校説明会｜駒澤大学高等学校</p>
-  <p class="lead">保護者の方といっしょに、校内に貼ってある番号①〜⑫の場所を回ろう。<br>掲示の「合言葉」を入力するとスタンプ獲得！ 場所ごとの「親子トーク」も試してみてね。<br>靴カバーを着けて見学してください。</p>
+  <p class="lead">保護者の方といっしょに、校内に貼ってある番号①〜⑫の場所を回ろう。<br>問題の絵を4つの中から選んで、正解するとスタンプ獲得！ 教室の中や案内図がヒントだよ。<br>靴カバーを着けて見学してください。</p>
 
   <div class="clear" id="clear">
     <strong>🎉 コンプリート！</strong>
@@ -96,7 +106,8 @@
     <p class="msg" id="dMsg" hidden></p>
     <p class="talk" id="dTalk" hidden><b>👨‍👩‍👧 親子トーク</b><span id="dTalkText"></span></p>
     <div id="askBox">
-      <input id="code" autocomplete="off" placeholder="合言葉を入力" inputmode="text">
+      <p class="q" id="dQ"></p>
+      <div class="choices" id="choices"></div>
       <p class="err" id="err"></p>
     </div>
     <div class="btns">
@@ -107,21 +118,73 @@
 </dialog>
 
 <script>
-// ★ スポットの編集はここだけ。code が各場所に掲示する合言葉です（ひらがな・数字可）。
+// ★ スポットの編集はここだけ。q=問題、choices=絵の4択（先頭が正解）、msg=特徴メッセージ、talk=親子トーク。
 const SPOTS = [
-  { id: "s1",  emoji: "🏋️", name: "① トレーニングルーム", hint: "A地区 1階｜ジムなみのマシンがあるよ", code: "きんにく", msg: "ジムみたいなウエイトトレーニングマシーンがずらり。部活動や授業で使います。", talk: "どのマシンを使ってみたい？ 親子で見つけてみよう。" },
-  { id: "s2",  emoji: "🍰", name: "② 調理実習室",       hint: "A地区 1階｜ケーキも作る男女共修",     code: "ケーキ", msg: "ちらし寿司からケーキまで作る実習室。男子も女子も一緒に作ります！ 部屋の前に、大学の資料・昨年度の入試問題・部活動案内があるので、ご自由にどうぞ。", talk: "ここで作ってみたい料理は何？" },
-  { id: "s3",  emoji: "🖌️", name: "③ 書道室",           hint: "A地区 1階",                           code: "すみ", msg: "書道室です。この日は個別相談会場になっています。", talk: "家族の中で、いちばん字がきれいなのは誰？" },
-  { id: "s4",  emoji: "💻", name: "④ 情報処理実習室",   hint: "A地区 1階｜難しいことを楽しく学ぶ",   code: "ぱそこん", msg: "難しいことも、やさしく、深く、楽しく学べる情報処理実習室。パソコンの部屋は全部で2か所あります。", talk: "パソコンで作ってみたいものはある？" },
-  { id: "s5",  emoji: "🎵", name: "⑤ 音楽室",           hint: "A地区 1階",                           code: "おんぷ", msg: "音楽の授業で使う特別教室です。", talk: "家族それぞれの「最近よく聴く曲」を教え合ってみよう。" },
-  { id: "s6",  emoji: "🎨", name: "⑥ 美術室",           hint: "A地区 1階",                           code: "えのぐ", msg: "美術の授業で使う特別教室です。", talk: "小学校の図工で、いちばん好きだった作品は？" },
-  { id: "s7",  emoji: "🥋", name: "⑦ 修道館",           hint: "C地区 地下｜柔道・剣道の道場",         code: "いっぽん", msg: "伝統と趣のある道場。男子は体育の授業で柔道・剣道をやります。", talk: "柔道と剣道、やってみたいのはどっち？" },
-  { id: "s8a", emoji: "🔭", name: "⑧ 物理・地学実験室", hint: "B地区 3階",                           code: "ほし", msg: "物理・地学の実験をする実験室（3階）。", talk: "理科でいちばんおもしろかった実験は？" },
-  { id: "s8b", emoji: "🧪", name: "⑧ 生物・化学実験室", hint: "B地区 4階",                           code: "じっけん", msg: "生物・化学の実験をする実験室（4階）。", talk: "調べてみたい生き物や、不思議に思うことはある？" },
-  { id: "s9",  emoji: "🧘", name: "⑨ 坐禅堂",           hint: "B地区 屋上｜本格的な坐禅ができる",     code: "ざぜん", msg: "本格的に坐禅ができる施設。校舎の屋上にあります。", talk: "ここで1分だけ、静かに深呼吸してみよう。" },
-  { id: "s10", emoji: "🥐", name: "⑩ 地下ホール・購買部", hint: "D地区 地下｜パン・おにぎり",         code: "ぱん", msg: "パンやおにぎりなどを売っている購買部がある、地下ホール。", talk: "お昼に買ってみたいのは何？" },
-  { id: "s11", emoji: "🎬", name: "⑪ 第一AV教室",       hint: "D地区 2階｜大画面でビデオ",           code: "えいが", msg: "ビデオなどを大画面で見られる教室です。", talk: "大画面で見てみたい映画や動画は？" },
-  { id: "s12", emoji: "📚", name: "⑫ 図書室",           hint: "D地区 3階｜蔵書は約4万冊",           code: "ほん", msg: "蔵書は約4万冊の図書室（3階）。", talk: "最近読んだ本で、いちばんおもしろかったのは？" },
+  { id: "s1", emoji: "🏋️", name: "① トレーニングルーム", hint: "A地区 1階｜ジムみたいな部屋",
+    q: "この部屋にあるのは、どれ？",
+    choices: [{"e": "🏋️", "t": "ウエイトマシン"}, {"e": "🎹", "t": "ピアノ"}, {"e": "🏊", "t": "プール"}, {"e": "🛷", "t": "そり"}], // 先頭が正解（表示時にシャッフル）
+    msg: "ジムみたいなウエイトトレーニングマシーンがずらり。部活動や授業で使います。",
+    talk: "どのマシンを使ってみたい？ 親子で見つけてみよう。" },
+  { id: "s2", emoji: "🍰", name: "② 調理実習室", hint: "A地区 1階｜男女いっしょに実習",
+    q: "ここで作る料理の例は、どれ？",
+    choices: [{"e": "🍣", "t": "ちらし寿司"}, {"e": "🍕", "t": "ピザ"}, {"e": "🍜", "t": "ラーメン"}, {"e": "🍛", "t": "カレー"}], // 先頭が正解（表示時にシャッフル）
+    msg: "ちらし寿司からケーキまで作る実習室。男子も女子も一緒に作ります！ 部屋の前に、大学の資料・昨年度の入試問題・部活動案内があるので、ご自由にどうぞ。",
+    talk: "ここで作ってみたい料理は何？" },
+  { id: "s3", emoji: "🖌️", name: "③ 書道室", hint: "A地区 1階",
+    q: "この教室で使う道具は、どれ？",
+    choices: [{"e": "🖌️", "t": "筆"}, {"e": "🎸", "t": "ギター"}, {"e": "⚽", "t": "サッカーボール"}, {"e": "🧪", "t": "フラスコ"}], // 先頭が正解（表示時にシャッフル）
+    msg: "書道室です。この日は個別相談会場になっています。",
+    talk: "家族の中で、いちばん字がきれいなのは誰？" },
+  { id: "s4", emoji: "💻", name: "④ 情報処理実習室", hint: "A地区 1階｜2か所あるよ",
+    q: "この教室で学ぶのは、どれ？",
+    choices: [{"e": "💻", "t": "パソコン"}, {"e": "🥋", "t": "柔道"}, {"e": "🧶", "t": "あみもの"}, {"e": "🎣", "t": "つり"}], // 先頭が正解（表示時にシャッフル）
+    msg: "難しいことも、やさしく、深く、楽しく学べる情報処理実習室。パソコンの部屋は全部で2か所あります。",
+    talk: "パソコンで作ってみたいものはある？" },
+  { id: "s5", emoji: "🎵", name: "⑤ 音楽室", hint: "A地区 1階",
+    q: "この教室でやることは、どれ？",
+    choices: [{"e": "🎵", "t": "歌や演奏"}, {"e": "🧪", "t": "実験"}, {"e": "🥋", "t": "柔道"}, {"e": "🍳", "t": "料理"}], // 先頭が正解（表示時にシャッフル）
+    msg: "音楽の授業で使う特別教室です。",
+    talk: "家族それぞれの「最近よく聴く曲」を教え合ってみよう。" },
+  { id: "s6", emoji: "🎨", name: "⑥ 美術室", hint: "A地区 1階",
+    q: "この教室でやることは、どれ？",
+    choices: [{"e": "🎨", "t": "絵をかく"}, {"e": "🏊", "t": "およぐ"}, {"e": "🎤", "t": "歌う"}, {"e": "🧮", "t": "計算する"}], // 先頭が正解（表示時にシャッフル）
+    msg: "美術の授業で使う特別教室です。",
+    talk: "小学校の図工で、いちばん好きだった作品は？" },
+  { id: "s7", emoji: "🥋", name: "⑦ 修道館", hint: "C地区 地下｜道場",
+    q: "この場所で行うのは、どれ？",
+    choices: [{"e": "🥋", "t": "柔道・剣道"}, {"e": "⚽", "t": "サッカー"}, {"e": "🏊", "t": "水泳"}, {"e": "🎾", "t": "テニス"}], // 先頭が正解（表示時にシャッフル）
+    msg: "伝統と趣のある道場。男子は体育の授業で柔道・剣道をやります。",
+    talk: "柔道と剣道、やってみたいのはどっち？" },
+  { id: "s8a", emoji: "🔭", name: "⑧ 物理・地学実験室", hint: "B地区 3階",
+    q: "3階のこの実験室で学ぶのは、どれ？",
+    choices: [{"e": "🔭", "t": "物理・地学"}, {"e": "🧬", "t": "生物・化学"}, {"e": "🎨", "t": "美術"}, {"e": "🏃", "t": "体育"}], // 先頭が正解（表示時にシャッフル）
+    msg: "物理・地学の実験をする実験室（3階）。",
+    talk: "理科でいちばんおもしろかった実験は？" },
+  { id: "s8b", emoji: "🧪", name: "⑧ 生物・化学実験室", hint: "B地区 4階",
+    q: "4階のこの実験室で学ぶのは、どれ？",
+    choices: [{"e": "🧬", "t": "生物・化学"}, {"e": "🔭", "t": "物理・地学"}, {"e": "🎹", "t": "音楽"}, {"e": "📜", "t": "書道"}], // 先頭が正解（表示時にシャッフル）
+    msg: "生物・化学の実験をする実験室（4階）。",
+    talk: "調べてみたい生き物や、不思議に思うことはある？" },
+  { id: "s9", emoji: "🧘", name: "⑨ 坐禅堂", hint: "B地区 屋上",
+    q: "ここでできるのは、どれ？",
+    choices: [{"e": "🧘", "t": "坐禅"}, {"e": "🏀", "t": "バスケ"}, {"e": "🎤", "t": "カラオケ"}, {"e": "🎣", "t": "つり"}], // 先頭が正解（表示時にシャッフル）
+    msg: "本格的に坐禅ができる施設。校舎の屋上にあります。",
+    talk: "ここで1分だけ、静かに深呼吸してみよう。" },
+  { id: "s10", emoji: "🥐", name: "⑩ 地下ホール・購買部", hint: "D地区 地下",
+    q: "購買部で売っているのは、どれ？",
+    choices: [{"e": "🥐", "t": "パン・おにぎり"}, {"e": "🚲", "t": "自転車"}, {"e": "🧸", "t": "ぬいぐるみ"}, {"e": "🪴", "t": "植木"}], // 先頭が正解（表示時にシャッフル）
+    msg: "パンやおにぎりなどを売っている購買部がある、地下ホール。",
+    talk: "お昼に買ってみたいのは何？" },
+  { id: "s11", emoji: "🎬", name: "⑪ 第一AV教室", hint: "D地区 2階",
+    q: "この教室でできるのは、どれ？",
+    choices: [{"e": "🎬", "t": "大画面でビデオ"}, {"e": "🏊", "t": "水泳"}, {"e": "🥋", "t": "柔道"}, {"e": "🍳", "t": "料理"}], // 先頭が正解（表示時にシャッフル）
+    msg: "ビデオなどを大画面で見られる教室です。",
+    talk: "大画面で見てみたい映画や動画は？" },
+  { id: "s12", emoji: "📚", name: "⑫ 図書室", hint: "D地区 3階",
+    q: "ここにたくさんあるのは、どれ？",
+    choices: [{"e": "📚", "t": "本（約4万冊）"}, {"e": "🥔", "t": "じゃがいも"}, {"e": "🧦", "t": "くつした"}, {"e": "🐟", "t": "さかな"}], // 先頭が正解（表示時にシャッフル）
+    msg: "蔵書は約4万冊の図書室（3階）。",
+    talk: "最近読んだ本で、いちばんおもしろかったのは？" },
 ];
 // 何個集めたらコンプリートにするか（全部なら SPOTS.length）
 const GOAL = 8;
@@ -138,7 +201,6 @@ function burst() {
     document.body.appendChild(c); setTimeout(() => c.remove(), 3200);
   }
 }
-const norm = s => s.trim().normalize("NFKC").toLowerCase();
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; } };
 const save = d => { try { localStorage.setItem(KEY, JSON.stringify(d)); } catch {} };
 let done = load();
@@ -165,30 +227,37 @@ function render() {
 
 function setMode(reveal) {
   $("askBox").hidden = reveal; $("dMsg").hidden = !reveal;
-  $("submitBtn").textContent = reveal ? "OK" : "スタンプをもらう";
+  $("submitBtn").hidden = !reveal; $("submitBtn").textContent = "OK";
   $("cancel").hidden = reveal;
   $("dMsg").textContent = reveal ? current.msg : "";
   $("dTalk").hidden = !reveal; $("dTalkText").textContent = reveal ? current.talk : "";
 }
+function buildChoices(s) {
+  $("dQ").textContent = s.q;
+  const list = s.choices.map((c, i) => ({ ...c, ok: i === 0 })).sort(() => Math.random() - .5);
+  $("choices").innerHTML = "";
+  list.forEach(c => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "choice";
+    b.innerHTML = `<span class="ce">${c.e}</span><span class="ct">${c.t}</span>`;
+    b.onclick = () => {
+      if (c.ok) { done.push(s.id); save(done); render(); setMode(true); if (done.length === GOAL) burst(); }
+      else { b.classList.add("wrong", "shake"); $("err").textContent = "ざんねん！ もういちど考えてみよう。"; }
+    };
+    $("choices").appendChild(b);
+  });
+}
 function open(s) {
   current = s;
   $("dEmoji").textContent = s.emoji; $("dName").textContent = s.name; $("dHint").textContent = s.hint;
-  $("code").value = ""; $("err").textContent = "";
+  $("err").textContent = "";
   const got = done.includes(s.id);
   setMode(got);
-  $("dlg").showModal(); if (!got) $("code").focus();
+  if (!got) buildChoices(s);
+  $("dlg").showModal();
 }
 
-$("form").addEventListener("submit", e => {
-  e.preventDefault();
-  if ($("askBox").hidden) { $("dlg").close(); return; }
-  if (norm($("code").value) === norm(current.code)) {
-    done.push(current.id); save(done); render(); setMode(true);
-    if (done.length === GOAL) burst();
-  } else {
-    $("err").textContent = "合言葉が違います。掲示を確認してね！";
-  }
-});
+$("form").addEventListener("submit", e => { e.preventDefault(); $("dlg").close(); });
 $("cancel").onclick = () => $("dlg").close();
 $("reset").onclick = () => { if (confirm("獲得したスタンプをすべて消します。よろしいですか？")) { done = []; save(done); render(); } };
 
