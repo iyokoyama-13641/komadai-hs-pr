@@ -344,34 +344,46 @@ function tone(seq, vol = .12) {
     });
   } catch {}
 }
-const noiseBuf = d => { const n = Math.floor(ac.sampleRate * d), b = ac.createBuffer(1, n, ac.sampleRate), c = b.getChannelData(0); for (let i = 0; i < n; i++) c[i] = Math.random() * 2 - 1; return b; };
-// 花火の音：打ち上げの笛 → ドーン → パチパチ。at=開始までの秒数、power=大きさ、whistle=笛を鳴らすか
-function fwSound(at = 0, power = 1, whistle = true) {
+// クリアの音：「ティリリリ ティ ティ ティー」。速い駆け上がりのあとに3つの音が続く。
+function note(f, at, d, vol = .11) {
+  const t = ac.currentTime + at;
+  [[f, vol, "triangle"], [f * 2, vol * .35, "sine"]].forEach(([fr, v, ty]) => {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = ty; o.frequency.value = fr;
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(v, t + .008); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+    o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + .02);
+  });
+}
+const NOTES = { C5: 523, E5: 659, G5: 784, C6: 1047, E6: 1319, G6: 1568, A6: 1760, C7: 2093, E7: 2637 };
+function phrase(run, at, step, tail, last) {
+  const { C5, E5, G5, C6, E6, G6, C7, E7 } = NOTES;
+  run.forEach((f, i) => note(f, at + i * step, .14));
+  const t0 = at + run.length * step + .04;
+  note(tail, t0, .12); note(tail, t0 + .13, .12); note(last, t0 + .26, last >= C7 ? .7 : .5);
+  return t0 + .26;
+}
+function jingle(level) {
   if (!soundOn) return;
   try {
     ac = ac || new (window.AudioContext || window.webkitAudioContext)();
-    const t = ac.currentTime + at, bt = t + .22;
-    if (whistle) {
-      const o = ac.createOscillator(), g = ac.createGain();
-      o.type = "sine"; o.frequency.setValueAtTime(500, t); o.frequency.exponentialRampToValueAtTime(2400, bt);
-      g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(.06 * power, t + .05); g.gain.linearRampToValueAtTime(.0001, bt);
-      o.connect(g); g.connect(ac.destination); o.start(t); o.stop(bt + .02);
+    const { C5, E5, G5, C6, E6, G6, C7, E7 } = NOTES;
+    const e1 = phrase([C5, E5, G5, C6, E6], 0, .055, G6, C7);
+    if (level >= 2) {
+      const e2 = phrase([E5, G5, C6, E6, G6, C7], .95, .05, C7, E7);
+      [C6, E6, G6].forEach(f => note(f, e2, 1.1, .07));
+      if (level >= 3) {
+        const e3 = phrase([G5, C6, E6, G6, C7, E7], 1.95, .045, E7, E7);
+        [C6, E6, G6, C7].forEach(f => note(f, e3, 1.6, .07));
+      }
     }
-    const n = ac.createBufferSource(), lp = ac.createBiquadFilter(), ng = ac.createGain();
-    n.buffer = noiseBuf(.9); lp.type = "lowpass";
-    lp.frequency.setValueAtTime(1000, bt); lp.frequency.exponentialRampToValueAtTime(120, bt + .8);
-    ng.gain.setValueAtTime(.5 * power, bt); ng.gain.exponentialRampToValueAtTime(.0001, bt + .9);
-    n.connect(lp); lp.connect(ng); ng.connect(ac.destination); n.start(bt);
-    const k = ac.createOscillator(), kg = ac.createGain();
-    k.frequency.setValueAtTime(110, bt); k.frequency.exponentialRampToValueAtTime(35, bt + .5);
-    kg.gain.setValueAtTime(.45 * power, bt); kg.gain.exponentialRampToValueAtTime(.0001, bt + .6);
-    k.connect(kg); kg.connect(ac.destination); k.start(bt); k.stop(bt + .65);
-    for (let i = 0; i < 14; i++) {
-      const ct = bt + .12 + Math.random() * .8, c = ac.createBufferSource(), hp = ac.createBiquadFilter(), cg = ac.createGain();
-      c.buffer = noiseBuf(.04); hp.type = "highpass"; hp.frequency.value = 3500;
-      cg.gain.setValueAtTime(.03 + .12 * power * Math.random(), ct); cg.gain.exponentialRampToValueAtTime(.0001, ct + .04);
-      c.connect(hp); hp.connect(cg); cg.connect(ac.destination); c.start(ct);
-    }
+  } catch {}
+}
+function glitter() {
+  if (!soundOn) return;
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    const pool = [NOTES.C6, NOTES.E6, NOTES.G6, NOTES.A6, NOTES.C7, NOTES.E7], s = Math.floor(Math.random() * 3);
+    for (let i = 0; i < 4; i++) note(pool[Math.min(s + i, pool.length - 1)], i * .06, .12, .05);
   } catch {}
 }
 let fwTimer = null;
@@ -421,13 +433,13 @@ function celebrate(count) {
   if (count === GOAL || count >= SPOTS.length) {
     sparkle(8, true);
     setTimeout(() => burstAt(x, y, 44, ["🎉", "⭐", "🎊", "✨", "🌟"], Math.min(innerWidth, 520) * .8), 220);
-    for (let i = 0; i < 8; i++) fwSound(i * .24, 1.1, i % 3 === 0);
+    jingle(2);
     buzz([60, 40, 60, 40, 140]);
     if (count >= SPOTS.length) pendingGrand = true;
   } else {
     sparkle(4, false);
     setTimeout(() => burstAt(x, y, 22, ["⭐", "✨", "🎉", "💮"], Math.min(innerWidth, 520) * .55), 220);
-    fwSound(0, .9, true); fwSound(.5, .7, false); buzz(40);
+    jingle(1); buzz(40);
   }
 }
 function startFireworks() {
@@ -451,9 +463,9 @@ function startFireworks() {
 }
 function grand() {
   $("grand").classList.add("show"); document.body.style.overflow = "hidden";
-  tone([[523, .18], [659, .18], [784, .18], [1047, .18], [784, .18], [1047, .6]], .1); buzz([80, 50, 80, 50, 80, 50, 300]);
-  for (let i = 0; i < 6; i++) fwSound(i * .3, 1.2, i % 2 === 0);
-  clearInterval(fwTimer); fwTimer = setInterval(() => fwSound(0, .9, Math.random() < .5), 650);
+  buzz([80, 50, 80, 50, 80, 50, 300]);
+  jingle(3);
+  clearInterval(fwTimer); setTimeout(() => { if ($("grand").classList.contains("show")) fwTimer = setInterval(glitter, 520); }, 3200);
   if (!reduce) { fwRun = true; startFireworks(); }
   $("grandClose").focus();
 }
