@@ -50,7 +50,8 @@
 <body>
 <main>
   <h1>🏫 校内スタンプラリー</h1>
-  <p class="lead">各スポットに掲示してある「合言葉」を入力して、スタンプを集めよう！</p>
+  <p class="lead" style="margin-bottom:2px">令和8年度 学校説明会｜駒澤大学高等学校</p>
+  <p class="lead">校内に貼ってある番号①〜⑫の場所を回って、掲示してある「合言葉」を入力しよう！<br>靴カバーを着けて見学してね。</p>
 
   <div class="clear" id="clear">
     <strong>🎉 コンプリート！</strong><br>
@@ -58,7 +59,7 @@
   </div>
 
   <section class="progress">
-    <div><strong id="count">0</strong> / <span id="total"></span> 個 獲得</div>
+    <div><strong id="count">0</strong> / <span id="total"></span> 個で完成（全<span id="all"></span>か所）</div>
     <div class="bar"><div id="fill"></div></div>
   </section>
 
@@ -84,13 +85,21 @@
 <script>
 // ★ スポットの編集はここだけ。code が各場所に掲示する合言葉です（ひらがな・数字可）。
 const SPOTS = [
-  { id: "gate",   emoji: "🚪", name: "正門",       hint: "最初のスポット",       code: "さくら" },
-  { id: "lib",    emoji: "📚", name: "図書室",     hint: "本がたくさんある部屋", code: "ほん" },
-  { id: "gym",    emoji: "🏀", name: "体育館",     hint: "部活動の紹介あり",     code: "ほし" },
-  { id: "sci",    emoji: "🔬", name: "理科室",     hint: "体験授業を実施中",     code: "ひかり" },
-  { id: "art",    emoji: "🎨", name: "美術室",     hint: "作品展示",             code: "にじ" },
-  { id: "cafe",   emoji: "🍱", name: "食堂",       hint: "学食メニューを見よう", code: "ごはん" },
+  { id: "s1",  emoji: "🏋️", name: "① トレーニングルーム", hint: "A地区 1階｜ジムなみのマシンがあるよ", code: "きんにく" },
+  { id: "s2",  emoji: "🍰", name: "② 調理実習室",       hint: "A地区 1階｜ケーキも作る男女共修",     code: "ケーキ" },
+  { id: "s3",  emoji: "🖌️", name: "③ 書道室",           hint: "A地区 1階",                           code: "すみ" },
+  { id: "s4",  emoji: "💻", name: "④ 情報処理実習室",   hint: "A地区 1階｜難しいことを楽しく学ぶ",   code: "ぱそこん" },
+  { id: "s5",  emoji: "🎵", name: "⑤ 音楽室",           hint: "A地区 1階",                           code: "おんぷ" },
+  { id: "s6",  emoji: "🎨", name: "⑥ 美術室",           hint: "A地区 1階",                           code: "えのぐ" },
+  { id: "s7",  emoji: "🥋", name: "⑦ 修道館",           hint: "C地区 地下｜柔道・剣道の道場",         code: "いっぽん" },
+  { id: "s8",  emoji: "🧪", name: "⑧ 実験室",           hint: "B地区 3・4階｜物理・地学／生物・化学", code: "じっけん" },
+  { id: "s9",  emoji: "🧘", name: "⑨ 坐禅堂",           hint: "B地区 屋上｜本格的な坐禅ができる",     code: "ざぜん" },
+  { id: "s10", emoji: "🥐", name: "⑩ 地下ホール・購買部", hint: "D地区 地下｜パン・おにぎり",         code: "ぱん" },
+  { id: "s11", emoji: "🎬", name: "⑪ 第一AV教室",       hint: "D地区 2階｜大画面でビデオ",           code: "えいが" },
+  { id: "s12", emoji: "📚", name: "⑫ 図書室",           hint: "D地区 3階｜蔵書は約4万冊",           code: "ほん" },
 ];
+// 何個集めたらコンプリートにするか（全部なら SPOTS.length）
+const GOAL = 8;
 const KEY = "stamp-rally-v1";
 const norm = s => s.trim().normalize("NFKC").toLowerCase();
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; } };
@@ -99,7 +108,7 @@ let done = load();
 let current = null;
 
 const $ = id => document.getElementById(id);
-$("total").textContent = SPOTS.length;
+$("total").textContent = GOAL; $("all").textContent = SPOTS.length;
 
 function render() {
   $("grid").innerHTML = "";
@@ -112,8 +121,8 @@ function render() {
     $("grid").appendChild(b);
   });
   $("count").textContent = done.length;
-  $("fill").style.width = (done.length / SPOTS.length * 100) + "%";
-  $("clear").classList.toggle("show", done.length === SPOTS.length);
+  $("fill").style.width = (Math.min(done.length / GOAL, 1) * 100) + "%";
+  $("clear").classList.toggle("show", done.length >= GOAL);
 }
 
 function open(s) {
