@@ -15,8 +15,9 @@ PAGE = """<!doctype html>
   @page { size: A4; margin: 0; }
   * { box-sizing: border-box; }
   body { margin: 0; color: #111; background: #fff; font-family: "Hiragino Sans", "Noto Sans JP", "Noto Sans CJK JP", system-ui, sans-serif; }
-  .page { width: 210mm; height: 297mm; padding: 13mm 14mm; display: flex; flex-direction: column; gap: 6mm; page-break-after: always; break-after: page; overflow: hidden; }
-  .top { display: flex; justify-content: space-between; font-size: 11pt; color: #1f5a45; font-weight: 700; letter-spacing: .08em; }
+  .page { width: 210mm; height: 297mm; padding: 10mm 14mm 11mm; display: flex; flex-direction: column; gap: 5mm; page-break-after: always; break-after: page; overflow: hidden; }
+  .banner { flex: none; height: 25mm; border-radius: 4mm; color: #fff; display: flex; justify-content: space-between; align-items: flex-end; padding: 3mm 5mm; font-size: 11pt; font-weight: 700; letter-spacing: .08em; text-shadow: 0 0 3mm rgba(0, 0, 0, .6);
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0) 25%, rgba(0, 0, 0, .65)), url("../docs/hero.jpg") center 38% / cover #1f5a45; }
   h1 { margin: 0; font-size: 34pt; line-height: 1.2; }
   .where { font-size: 12pt; color: #555; margin-top: 1mm; }
   .q { font-size: 21pt; font-weight: 700; line-height: 1.45; padding: 5mm 6mm; border: 2.5pt solid #1f5a45; border-radius: 4mm; background: #f1f7f3; }
@@ -44,7 +45,7 @@ function posterOrder(s) {
 const pic = c => c.c ? `<span class="sw" style="background:${c.c}"></span>` : c.i ? ICONS[c.i] : c.e ? `<span class="em">${c.e}</span>` : "";
 document.getElementById("root").innerHTML = SPOTS.map(s => `
 <section class="page">
-  <div class="top"><span>校内クイズ探検</span><span>令和8年度 学校説明会｜駒澤大学高等学校</span></div>
+  <div class="banner"><span>校内クイズ探検</span><span>令和8年度 学校説明会｜駒澤大学高等学校</span></div>
   <div><h1>${s.name}</h1><div class="where">${s.hint}</div></div>
   <div class="q">${s.q}</div>
   <div class="grid">${posterOrder(s).map((c, i) => `

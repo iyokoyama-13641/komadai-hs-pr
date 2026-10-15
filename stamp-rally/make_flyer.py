@@ -24,10 +24,12 @@ HTML = """<!doctype html>
   * { box-sizing: border-box; }
   body { margin: 0; color: #111; font-family: "Hiragino Sans", "Noto Sans JP", "Noto Sans CJK JP", system-ui, sans-serif; }
   .page { width: 210mm; height: 297mm; padding: 12mm 16mm 10mm; display: flex; flex-direction: column; align-items: center; gap: 5mm; text-align: center; }
-  .school { font-size: 13pt; color: #1f5a45; font-weight: 700; letter-spacing: .1em; }
+  .banner { flex: none; width: 100%; height: 66mm; border-radius: 6mm; color: #fff; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; padding: 6mm 8mm; text-align: left; text-shadow: 0 0 4mm rgba(0, 0, 0, .6);
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0) 30%, rgba(0, 0, 0, .7)), url("../docs/hero.jpg") center 58% / cover #1f5a45; }
+  .school { font-size: 13pt; font-weight: 700; letter-spacing: .1em; }
   h1 { margin: 0; font-size: 40pt; line-height: 1.2; }
   .lead { font-size: 18pt; line-height: 1.6; }
-  .qr { width: 80mm; height: 80mm; padding: 4mm; border: 3pt solid #1f5a45; border-radius: 6mm; }
+  .qr { width: 74mm; height: 74mm; padding: 4mm; border: 3pt solid #1f5a45; border-radius: 6mm; }
   .qr svg { width: 100%; height: 100%; display: block; }
   .url { font-size: 10pt; color: #555; word-break: break-all; }
   ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 3mm; width: 100%; text-align: left; font-size: 16pt; line-height: 1.5; }
@@ -35,8 +37,7 @@ HTML = """<!doctype html>
   li b { flex: none; width: 12mm; height: 12mm; border-radius: 50%; background: #1f5a45; color: #fff; display: grid; place-items: center; font-size: 18pt; }
   .note { font-size: 12pt; color: #333; line-height: 1.7; }
 </style></head><body><section class="page">
-  <div class="school">駒澤大学高等学校　令和8年度 学校説明会</div>
-  <h1>校内クイズ探検</h1>
+  <div class="banner"><div class="school">駒澤大学高等学校　令和8年度 学校説明会</div><h1>校内クイズ探検</h1></div>
   <div class="lead">保護者の方といっしょに、校内の場所をめぐって<br>クイズに挑戦しよう！</div>
   <div class="qr">__SVG__</div>
   <div class="url">__URL__</div>
