@@ -71,6 +71,7 @@
   .choice .ce svg { width: 56px; height: 56px; stroke: currentColor; fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
   .choice .ce svg .plate { stroke-width: 5; }
   .choice .ct.big { font-size: 1.05rem; font-weight: 700; color: var(--ink); padding: 14px 0; }
+  .choice .sw { display: inline-block; width: 46px; height: 46px; border-radius: 50%; border: 2px solid var(--line); margin: 3px 0; }
 </style>
 </head>
 <body>
@@ -177,7 +178,7 @@ const SPOTS = [
     talk: "家族それぞれの「最近よく聴く曲」を教え合ってみよう。" },
   { id: "s6", emoji: "🎨", name: "⑥ 美術室", hint: "A地区 1階",
     q: "絵の具の黄色と青を混ぜると、何色になる？",
-    choices: [{"e": "🟡🔵", "t": "緑"}, {"e": "🔴🔵", "t": "むらさき"}, {"e": "🔴🟡", "t": "オレンジ"}, {"e": "🔴⚪", "t": "ピンク"}], // 先頭が正解（表示時にシャッフル）
+    choices: [{"c": "#2e9e4f", "t": "緑"}, {"c": "#7b3fa0", "t": "むらさき"}, {"c": "#f28c1c", "t": "オレンジ"}, {"c": "#f6a6c1", "t": "ピンク"}], // 先頭が正解（表示時にシャッフル）
     msg: "黄色と青を混ぜると緑になります。ほかにも、赤と青でむらさき、赤と黄でオレンジ。色を混ぜるのは、美術の授業でも大活躍です。ここは美術の授業で使う特別教室です。",
     talk: "小学校の図工で、いちばん好きだった作品は？" },
   { id: "s7", emoji: "🥋", name: "⑦ 修道館", hint: "C地区 地下｜道場",
@@ -269,7 +270,7 @@ function buildChoices(s) {
   list.forEach(c => {
     const b = document.createElement("button");
     b.type = "button"; b.className = "choice";
-    b.innerHTML = (c.i || c.e) ? `<span class="ce">${c.i ? ICONS[c.i] : c.e}</span><span class="ct">${c.t}</span>` : `<span class="ct big">${c.t}</span>`;
+    b.innerHTML = (c.i || c.e || c.c) ? `<span class="ce">${c.c ? `<span class="sw" style="background:${c.c}"></span>` : c.i ? ICONS[c.i] : c.e}</span><span class="ct">${c.t}</span>` : `<span class="ct big">${c.t}</span>`;
     b.onclick = () => {
       if (c.ok) { done.push(s.id); save(done); render(); setMode(true); if (done.length === GOAL) burst(); }
       else { b.classList.add("wrong", "shake"); $("err").textContent = "ざんねん！ もういちど考えてみよう。"; }
