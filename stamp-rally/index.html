@@ -68,6 +68,8 @@
   .shake { animation: shake .3s; }
   @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
   @media (prefers-reduced-motion: reduce) { .shake { animation: none; } }
+  .choice .ce svg { width: 56px; height: 56px; stroke: currentColor; fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+  .choice .ce svg .plate { stroke-width: 5; }
 </style>
 </head>
 <body>
@@ -118,11 +120,18 @@
 </dialog>
 
 <script>
+// 絵文字にない絵は、ここに線画(SVG)で用意する。choices の "i" で指定。
+const ICONS = {
+  bench: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 46H46M12 46V58M42 46V58"/><circle cx="14" cy="38" r="4"/><path d="M19 41H40L48 48V58M27 41V22"/><path d="M12 22H42" /><path class="plate" d="M13 16V28M41 16V28"/></svg>',
+  squat: '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="26" cy="11" r="4"/><path d="M26 16V22L32 38L45 42L39 57H49M12 20H42"/><path class="plate" d="M12 14V26M42 14V26"/></svg>',
+  legpress: '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M6 54H30M10 38L24 50"/><circle cx="8" cy="28" r="4"/><path d="M11 32L22 46L36 34L48 42"/><path class="plate" d="M50 24L54 54"/></svg>',
+  curl: '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="22" cy="10" r="4"/><path d="M22 15V38L16 58M22 38L30 58M22 20L27 32L37 23"/><path class="plate" d="M32 19L43 28"/></svg>'
+};
 // ★ スポットの編集はここだけ。q=問題、choices=絵の4択（先頭が正解）、msg=特徴メッセージ、talk=親子トーク。
 const SPOTS = [
   { id: "s1", emoji: "🏋️", name: "① トレーニングルーム", hint: "A地区 1階｜ジムみたいな部屋",
     q: "胸の筋肉（大胸筋）を鍛えるのは、どれ？",
-    choices: [{"e": "🏋️", "t": "ベンチプレス"}, {"e": "🦵", "t": "スクワット"}, {"e": "🦿", "t": "レッグプレス"}, {"e": "💪", "t": "アームカール"}], // 先頭が正解（表示時にシャッフル）
+    choices: [{"i": "bench", "t": "ベンチプレス"}, {"i": "squat", "t": "スクワット"}, {"i": "legpress", "t": "レッグプレス"}, {"i": "curl", "t": "アームカール"}], // 先頭が正解（表示時にシャッフル）
     msg: "ベンチプレスは胸、スクワットとレッグプレスは脚、アームカールは腕の筋肉を鍛えます。ジムみたいなウエイトトレーニングマシーンがずらり。部活動や授業で使います。",
     talk: "どのマシンを使ってみたい？ 親子で見つけてみよう。" },
   { id: "s2", emoji: "🍰", name: "② 調理実習室", hint: "A地区 1階｜男女いっしょに実習",
@@ -239,7 +248,7 @@ function buildChoices(s) {
   list.forEach(c => {
     const b = document.createElement("button");
     b.type = "button"; b.className = "choice";
-    b.innerHTML = `<span class="ce">${c.e}</span><span class="ct">${c.t}</span>`;
+    b.innerHTML = `<span class="ce">${c.i ? ICONS[c.i] : c.e}</span><span class="ct">${c.t}</span>`;
     b.onclick = () => {
       if (c.ok) { done.push(s.id); save(done); render(); setMode(true); if (done.length === GOAL) burst(); }
       else { b.classList.add("wrong", "shake"); $("err").textContent = "ざんねん！ もういちど考えてみよう。"; }
