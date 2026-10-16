@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><title>校内クイズ探検 場所の表示板</title>
+<style>
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: #111; background: #fff; font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", "Noto Sans JP", "Noto Sans CJK JP", "IPAexGothic", "IPAGothic", sans-serif; }
+  .page { width: 210mm; height: 297mm; padding: 12mm 14mm; display: flex; flex-direction: column; gap: 10mm; page-break-after: always; break-after: page; overflow: hidden; }
+  .photo { flex: none; height: 78mm; border-radius: 6mm; color: #fff; display: flex; flex-direction: column; justify-content: flex-end; padding: 6mm 8mm; text-shadow: 0 0 4mm rgba(0, 0, 0, .6);
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0) 35%, rgba(0, 0, 0, .7)), url("../docs/hero.jpg") center 45% / cover #1f5a45; }
+  .photo .school { font-size: 14pt; font-weight: 700; letter-spacing: .1em; }
+  .photo .title { font-size: 34pt; font-weight: 800; line-height: 1.25; }
+  .main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12mm; text-align: center; }
+  .no { width: 70mm; height: 70mm; border-radius: 50%; background: #1f5a45; color: #fff; display: grid; place-items: center; font-size: 110pt; font-weight: 800; line-height: 1; }
+  .name { font-size: 58pt; font-weight: 800; line-height: 1.25; word-break: keep-all; padding: 0 4mm; }
+  .where { font-size: 30pt; font-weight: 700; color: #1f5a45; border: 3pt solid #1f5a45; border-radius: 99mm; padding: 3mm 12mm; }
+  .foot { flex: none; font-size: 13pt; color: #444; text-align: center; border-top: 1pt solid #bbb; padding-top: 4mm; }
+</style></head><body>
+<div id="root"></div>
+<script>
+const SPOTS = [
+  { id: "s1", pos: 2, emoji: "🏋️", name: "① トレーニングルーム", hint: "A地区 1階｜ジムみたいな部屋",
+    q: "胸の筋肉（大胸筋）を鍛えるのは、どれ？",
+    choices: [{"i": "bench", "t": "ベンチプレス"}, {"i": "squat", "t": "スクワット"}, {"i": "legpress", "t": "レッグプレス"}, {"i": "curl", "t": "アームカール"}], // 先頭が正解（表示時にシャッフル）
+    msg: "ベンチプレスは胸、スクワットとレッグプレスは脚、アームカールは腕の筋肉を鍛えます。ジムみたいなウエイトトレーニングマシーンがずらり。部活動や授業で使います。",
+    talk: "どのマシンを使ってみたい？ 親子で見つけてみよう。" },
+  { id: "s2", pos: 4, emoji: "🍰", name: "② 調理実習室", hint: "A地区 1階｜男女いっしょに実習",
+    q: "パンやうどんの生地を、平らな厚さにのばすときに使う道具は、どれ？",
+    choices: [{"i": "rollingpin", "t": "めん棒"}, {"i": "shamoji", "t": "しゃもじ"}, {"i": "ladle", "t": "おたま"}, {"i": "whisk", "t": "泡立て器"}], // 先頭が正解（表示時にシャッフル）
+    msg: "めん棒は、パンやうどん、クッキーなどの生地を、同じ厚さにのばす道具です。カレーライスからケーキまで作る実習室で、男子も女子も一緒に作ります！ 部屋の前に、大学の資料・昨年度の入試問題・部活動案内があるので、ご自由にどうぞ。",
+    talk: "ここで作ってみたい料理は何？" },
+  { id: "s3", pos: 1, emoji: "🖌️", name: "③ 書道室", hint: "A地区 1階",
+    q: "「〇〇も筆の誤り」ということわざの〇〇に入る、書の名人は誰？",
+    choices: [{"t": "弘法（空海）"}, {"t": "最澄"}, {"t": "聖徳太子"}, {"t": "織田信長"}], // 先頭が正解（表示時にシャッフル）
+    msg: "弘法大師（空海）は、書の名人としても有名です。書の名人でも、たまには書き間違えることがある。「名人でも失敗する」という意味のことわざです。この教室は、説明会の日は個別相談会場になっています。",
+    talk: "家族の中で、いちばん字がきれいなのは誰？" },
+  { id: "s4", pos: 3, emoji: "💻", name: "④ 情報処理実習室", hint: "A地区 1階｜2か所あるよ",
+    q: "パソコンの「頭脳」にあたり、計算や命令の処理をする部品は、どれ？",
+    choices: [{"i": "cpu", "t": "CPU"}, {"i": "keyboard", "t": "キーボード"}, {"i": "mouse", "t": "マウス"}, {"i": "display", "t": "ディスプレイ"}], // 先頭が正解（表示時にシャッフル）
+    msg: "CPU（シーピーユー）は、計算や命令の処理をするパソコンの頭脳です。難しいことも、やさしく、深く、楽しく学べる情報処理実習室。パソコンの部屋は全部で2か所あります。",
+    talk: "パソコンで作ってみたいものはある？" },
+  { id: "s5", pos: 3, emoji: "🎵", name: "⑤ 音楽室", hint: "A地区 1階",
+    q: "「運命」や「第九」を作曲した音楽家は、誰？",
+    choices: [{"t": "ベートーヴェン"}, {"t": "モーツァルト"}, {"t": "バッハ"}, {"t": "ショパン"}], // 先頭が正解（表示時にシャッフル）
+    msg: "「運命」「第九」はベートーヴェンの名曲です。耳が聞こえにくくなっても作曲を続けたことで知られています。ここは音楽の授業で使う特別教室です。",
+    talk: "家族それぞれの「最近よく聴く曲」を教え合ってみよう。" },
+  { id: "s6", pos: 1, emoji: "🎨", name: "⑥ 美術室", hint: "A地区 1階",
+    q: "絵の具の黄色と青を混ぜると、何色になる？",
+    choices: [{"c": "#2e9e4f", "t": "緑"}, {"c": "#7b3fa0", "t": "むらさき"}, {"c": "#f28c1c", "t": "オレンジ"}, {"c": "#f6a6c1", "t": "ピンク"}], // 先頭が正解（表示時にシャッフル）
+    msg: "黄色と青を混ぜると緑になります。ほかにも、赤と青でむらさき、赤と黄でオレンジ。色を混ぜるのは、美術の授業でも大活躍です。ここは美術の授業で使う特別教室です。",
+    talk: "小学校の図工で、いちばん好きだった作品は？" },
+  { id: "s7", pos: 4, emoji: "🥋", name: "⑦ 修道館", hint: "C地区 地下｜道場",
+    q: "武道は「〇〇に始まり、〇〇に終わる」といわれます。〇〇に入る言葉は、どれ？",
+    choices: [{"t": "礼"}, {"t": "技"}, {"t": "力"}, {"t": "勝ち"}], // 先頭が正解（表示時にシャッフル）
+    msg: "武道は「礼に始まり、礼に終わる」といわれます。相手や道場、道具への感謝と敬意を、おじぎ（礼）で表します。ここは伝統と趣のある道場。男子は体育の授業で柔道・剣道をやります。",
+    talk: "柔道と剣道、やってみたいのはどっち？" },
+  { id: "s8a", pos: 2, emoji: "🔭", name: "⑧ 物理・地学実験室", hint: "B地区 3階",
+    q: "太陽系の惑星で、いちばん大きいのは、どれ？",
+    choices: [{"i": "jupiter", "t": "木星"}, {"i": "saturn", "t": "土星"}, {"i": "mars", "t": "火星"}, {"i": "earth", "t": "地球"}], // 先頭が正解（表示時にシャッフル）
+    msg: "いちばん大きい惑星は木星です。地球が約1300個も入る大きさだといわれています。ここは物理・地学の実験をする実験室（3階）です。",
+    talk: "理科でいちばんおもしろかった実験は？" },
+  { id: "s8b", pos: 3, emoji: "🧪", name: "⑧ 生物・化学実験室", hint: "B地区 4階",
+    q: "血液の成分で、体じゅうに酸素を運んでいるのは、どれ？",
+    choices: [{"t": "赤血球"}, {"t": "白血球"}, {"t": "血小板"}, {"t": "血しょう"}], // 先頭が正解（表示時にシャッフル）
+    msg: "酸素を運ぶのは赤血球です。赤い色は、酸素と結びつく「ヘモグロビン」のはたらきです。ここは生物・化学の実験をする実験室（4階）です。",
+    talk: "調べてみたい生き物や、不思議に思うことはある？" },
+  { id: "s9", pos: 1, emoji: "🧘", name: "⑨ 坐禅堂", hint: "B地区 屋上",
+    q: "坐禅堂にお祀りしている仏様は、どなた？",
+    choices: [{"t": "文殊菩薩"}, {"t": "観音菩薩"}, {"t": "地蔵菩薩"}, {"t": "普賢菩薩"}], // 先頭が正解（表示時にシャッフル）
+    msg: "坐禅堂には、文殊菩薩（もんじゅぼさつ）様をお祀りしています。「三人寄れば文殊の知恵」の文殊です。本格的に坐禅ができる施設で、校舎の屋上にあります。",
+    talk: "ここで1分だけ、静かに深呼吸してみよう。" },
+  { id: "s10", pos: 4, emoji: "🥐", name: "⑩ 地下ホール・購買部", hint: "D地区 地下",
+    q: "パンをふくらませるのに使われる、小さな生き物は、どれ？",
+    choices: [{"t": "酵母（イースト）"}, {"t": "乳酸菌"}, {"t": "納豆菌"}, {"t": "大腸菌"}], // 先頭が正解（表示時にシャッフル）
+    msg: "パンがふくらむのは、酵母（イースト）が出す二酸化炭素のおかげです。ここはパンやおにぎりなどを売っている購買部がある、地下ホールです。",
+    talk: "お昼に買ってみたいのは何？" },
+  { id: "s11", pos: 2, emoji: "🎬", name: "⑪ 第一AV教室", hint: "D地区 2階",
+    q: "映画は、1秒間におよそ何枚の絵（写真）を次々に映して、動いて見せているでしょう？",
+    choices: [{"t": "24枚"}, {"t": "2枚"}, {"t": "240枚"}, {"t": "2400枚"}], // 先頭が正解（表示時にシャッフル）
+    msg: "映画は、1秒間に24枚（24コマ）の絵を次々に映して、動いているように見せています。パラパラ漫画と同じしくみです。ここはビデオなどを大画面で見られる教室です。",
+    talk: "大画面で見てみたい映画や動画は？" },
+  { id: "s12", pos: 3, emoji: "📚", name: "⑫ 図書室", hint: "D地区 3階",
+    q: "「吾輩は猫である」を書いた作家は、誰？",
+    choices: [{"t": "夏目漱石"}, {"t": "芥川龍之介"}, {"t": "太宰治"}, {"t": "宮沢賢治"}], // 先頭が正解（表示時にシャッフル）
+    msg: "「吾輩は猫である」は夏目漱石のデビュー作です。ここは蔵書が約4万冊の図書室（3階）。気になる本を探してみよう。",
+    talk: "最近読んだ本で、いちばんおもしろかったのは？" },
+];
+const CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫";
+document.getElementById("root").innerHTML = SPOTS.map(s => {
+  const m = s.name.match(/^([①-⑫])\s*(.*)$/);
+  const no = CIRCLED.indexOf(m[1]) + 1, name = m[2], where = s.hint.split("｜")[0];
+  const size = name.length <= 8 ? 58 : name.length <= 10 ? 46 : 40;   // 長い名前は小さくして、1行に収める
+  return `<section class="page">
+  <div class="photo"><div class="school">駒澤大学高等学校　令和8年度 学校説明会</div><div class="title">校内クイズ探検</div></div>
+  <div class="main"><div class="no">${no}</div><div class="name" style="font-size:${size}pt">${name}</div><div class="where">${where}</div></div>
+  <div class="foot">この場所のクイズは、スマホの「校内クイズ探検」で挑戦できます。</div>
+</section>`;
+}).join("");
+</script></body></html>
