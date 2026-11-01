@@ -8,7 +8,8 @@
   html,body{margin:0;height:100%;background:#111;color:#eee;font-family:"Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif;
     -webkit-user-select:none;user-select:none;touch-action:none}
   #wrap{max-width:960px;margin:0 auto;display:flex;flex-direction:column;min-height:100%}
-  canvas{width:100%;display:block;background:#000;aspect-ratio:16/9}
+  #stage{position:relative;width:100%;aspect-ratio:16/9;background:#000}
+  #stage canvas{position:absolute;left:0;top:0;width:100%;height:100%;display:block}
   #help{font-size:12px;padding:6px 10px;color:#aaa;line-height:1.7}
   #help b{color:#ffd23a}
   #pad{display:none;justify-content:space-between;padding:8px 10px 16px}
@@ -22,7 +23,7 @@
 </head>
 <body>
 <div id="wrap">
-  <canvas id="c" width="960" height="540"></canvas>
+  <div id="stage"><canvas id="gl"></canvas><canvas id="c" width="960" height="540"></canvas></div>
   <div id="help">
     <b>1P</b>: A/D=移動 S=腰を落とす（後ろ入力でガード） J=突き放し K=足払い L=<b>投げ</b><br>
     <b>投げ技</b>（相手に近づいて L）: そのまま=<b>大外刈</b>　前+L=<b>背負い投げ</b>　後ろ+L=<b>巴投げ</b>　S+L=<b>内股</b>　／　<b>2P</b>: ←→=移動 ↓=腰を落とす ,=突き放し .=足払い /=投げ　／　P=ポーズ<br>
@@ -38,6 +39,7 @@
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r149/three.min.js"></script>
 <script>
 "use strict";
 const cv = document.getElementById('c'), ctx = cv.getContext('2d');
@@ -462,37 +464,213 @@ function nextRound() {
 }
 
 /* ---------- 描画 ---------- */
-function drawBG() {
-  const g = ctx.createLinearGradient(0, 0, 0, GROUND);
-  g.addColorStop(0, '#3a2a1c'); g.addColorStop(1, '#7a5836');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, W, GROUND);
-  ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 2;
-  for (let x = 0; x < W; x += 60) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, GROUND); ctx.stroke(); }
-  for (let i = 0; i < 4; i++) {
-    const wx = 90 + i * 220;
-    ctx.fillStyle = '#bcd9e8'; ctx.fillRect(wx, 80, 120, 110);
-    ctx.fillStyle = '#3a2a1c'; ctx.fillRect(wx + 58, 80, 4, 110); ctx.fillRect(wx, 132, 120, 4);
-    ctx.strokeStyle = '#2a1c10'; ctx.lineWidth = 6; ctx.strokeRect(wx, 80, 120, 110);
+/* ---------- 3D（three.js） ---------- */
+const G3 = { ok: false, cx: 480, cd: 760 };
+function canvasTex(w, h, fn, rx = 1, ry = 1) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h; fn(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); t.anisotropy = 8; return t;
+}
+function tatamiPainter(base, edge, hi) {
+  return (g, w, h) => {
+    g.fillStyle = base; g.fillRect(0, 0, w, h);
+    for (let y = 0; y < h; y += 4) { g.fillStyle = `rgba(0,0,0,${(y / 4) % 2 ? 0.07 : 0.02})`; g.fillRect(0, y, w, 2); }
+    for (let i = 0; i < 2200; i++) { g.fillStyle = `rgba(255,255,255,${Math.random() * 0.06})`; g.fillRect(Math.random() * w, Math.random() * h, 3 + Math.random() * 14, 1); }
+    g.fillStyle = edge;
+    g.fillRect(0, 0, w, 9); g.fillRect(0, h / 2 - 4, w, 9); g.fillRect(0, h - 9, w, 9);
+    g.fillRect(0, 0, 9, h / 2); g.fillRect(w / 2 - 4, h / 2, 9, h / 2);
+    g.fillStyle = hi; g.fillRect(0, 9, w, 2); g.fillRect(0, h / 2 + 5, w, 2);
+  };
+}
+function buildDojo(S) {
+  const std = (o) => new THREE.MeshStandardMaterial(o);
+  // 床：中央が緑の試合場、まわりが赤の危険地帯
+  const red = new THREE.Mesh(new THREE.PlaneGeometry(2000, 1100), std({ map: canvasTex(512, 512, tatamiPainter('#a8423a', '#6e2420', '#c26a60'), 2000 / 240, 1100 / 240), roughness: 0.95 }));
+  red.rotation.x = -PI / 2; red.position.set(480, -0.4, 0); red.receiveShadow = true; S.add(red);
+  const green = new THREE.Mesh(new THREE.PlaneGeometry(960, 520), std({ map: canvasTex(512, 512, tatamiPainter('#8fae5a', '#4d6b2c', '#b5d07e'), 960 / 240, 520 / 240), roughness: 0.9 }));
+  green.rotation.x = -PI / 2; green.position.set(480, 0, 0); green.receiveShadow = true; S.add(green);
+  // 奥の板壁
+  const wood = canvasTex(512, 512, (g, w, h) => {
+    g.fillStyle = '#6b4a2b'; g.fillRect(0, 0, w, h);
+    for (let x = 0; x < w; x += 64) {
+      g.fillStyle = `rgba(${(Math.random() * 30) | 0},${(Math.random() * 20) | 0},0,.18)`; g.fillRect(x, 0, 64, h);
+      g.fillStyle = 'rgba(0,0,0,.45)'; g.fillRect(x, 0, 3, h);
+    }
+    for (let i = 0; i < 900; i++) { g.fillStyle = `rgba(0,0,0,${Math.random() * 0.08})`; g.fillRect(Math.random() * w, Math.random() * h, 1, 20 + Math.random() * 90); }
+  }, 1800 / 512, 520 / 512);
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(1800, 520), std({ map: wood, roughness: 0.9 }));
+  wall.position.set(480, 260, -420); wall.receiveShadow = true; S.add(wall);
+  // 腰板
+  const dado = new THREE.Mesh(new THREE.BoxGeometry(1800, 70, 6), std({ color: 0x2f2014, roughness: 0.8 }));
+  dado.position.set(480, 35, -417); S.add(dado);
+  // 窓
+  const glass = new THREE.MeshBasicMaterial({ color: 0xcfe6f2 }), frameM = std({ color: 0x2a1c10, roughness: 0.7 });
+  [150, 370, 590, 810].forEach(cx => {
+    const gl = new THREE.Mesh(new THREE.PlaneGeometry(116, 104), glass); gl.position.set(cx, 300, -416); S.add(gl);
+    [[116, 7, 0, 55], [116, 7, 0, -55], [7, 112, 58, 0], [7, 112, -58, 0], [4, 104, 0, 0], [116, 4, 0, 0]].forEach(([bw, bh, ox, oy]) => {
+      const b = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, 8), frameM); b.position.set(cx + ox, 300 + oy, -414); S.add(b);
+    });
+  });
+  // 掛け軸「柔」
+  const scrollTex = canvasTex(140, 300, (g, w, h) => {
+    g.fillStyle = '#f2ead4'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = '#5a1f1f'; g.lineWidth = 8; g.strokeRect(4, 4, w - 8, h - 8);
+    g.fillStyle = '#111'; g.font = `bold 108px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('柔', w / 2, h / 2);
+  });
+  const scroll = new THREE.Mesh(new THREE.PlaneGeometry(76, 163), new THREE.MeshBasicMaterial({ map: scrollTex }));
+  scroll.position.set(480, 300, -415); S.add(scroll);
+  // 梁
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(1800, 36, 36), frameM); beam.position.set(480, 500, -405); S.add(beam);
+  [-120, 1080].forEach(x => { const pl = new THREE.Mesh(new THREE.BoxGeometry(46, 520, 46), frameM); pl.position.set(x, 260, -400); S.add(pl); });
+}
+const MATS = {};
+function buildModel(ch, S) {
+  const std = (c, r) => new THREE.MeshStandardMaterial({ color: c, roughness: r });
+  const m = { gi: std(ch.gi, 0.85), shade: std(ch.shade, 0.9), skin: std(ch.skin, 0.55), hair: std(ch.hair, 0.5), belt: std(ch.belt, 0.7), dark: std('#1a1a1a', 0.4), lap: std(ch.shade, 0.9) };
+  const cyl = new THREE.CylinderGeometry(1, 1, 1, 16, 1), sph = new THREE.SphereGeometry(1, 20, 14), box = new THREE.BoxGeometry(1, 1, 1);
+  const hairGeo = new THREE.SphereGeometry(1, 20, 12, 0, PI * 2, 0, PI * 0.52);
+  const root = new THREE.Group(), roll = new THREE.Group(), body = new THREE.Group();
+  root.add(roll); roll.add(body); S.add(root);
+  const add = (geo, mat) => { const me = new THREE.Mesh(geo, mat); me.castShadow = true; body.add(me); return me; };
+  const M = { root, roll, body, yaw: undefined };
+  M.torso = add(cyl, m.gi); M.chest = add(sph, m.gi); M.hipS = add(sph, m.gi);
+  M.belt = add(cyl, m.belt); M.knot = add(box, m.belt); M.tail1 = add(box, m.belt); M.tail2 = add(box, m.belt);
+  M.lapA = add(cyl, m.lap); M.lapB = add(cyl, m.lap);
+  M.neck = add(cyl, m.skin); M.head = add(sph, m.skin); M.hair = add(hairGeo, m.hair);
+  M.eyeA = add(sph, m.dark); M.eyeB = add(sph, m.dark); M.nose = add(sph, m.skin);
+  M.arms = [0, 1].map(i => ({ sj: add(sph, i ? m.shade : m.gi), up: add(cyl, i ? m.shade : m.gi), ej: add(sph, i ? m.shade : m.gi), lo: add(cyl, i ? m.shade : m.gi), hand: add(sph, m.skin) }));
+  M.legs = [0, 1].map(i => ({ hj: add(sph, i ? m.shade : m.gi), th: add(cyl, i ? m.shade : m.gi), kj: add(sph, i ? m.shade : m.gi), sh: add(cyl, i ? m.shade : m.gi), foot: add(sph, m.skin) }));
+  return M;
+}
+const HAS3 = typeof THREE !== 'undefined';
+const _up = HAS3 ? new THREE.Vector3(0, 1, 0) : null, _d = HAS3 ? new THREE.Vector3() : null;
+function place(mesh, a, b, rx, rz) { // a→b に円柱を置く
+  _d.subVectors(b, a); const len = _d.length() || 0.001;
+  mesh.position.copy(a).addScaledVector(_d, 0.5);
+  mesh.quaternion.setFromUnitVectors(_up, _d.divideScalar(len));
+  mesh.scale.set(rx, len, rz === undefined ? rx : rz);
+}
+function ik(A, B, L1, L2, hint) { // 2関節（ひじ・ひざ）の位置
+  const dx = B[0] - A[0], dy = B[1] - A[1], d = Math.hypot(dx, dy) || 0.001;
+  if (d >= L1 + L2 - 0.5) { const k = L1 / (L1 + L2); return [A[0] + dx * k, A[1] + dy * k]; }
+  const a = (L1 * L1 - L2 * L2 + d * d) / (2 * d), h = Math.sqrt(Math.max(0, L1 * L1 - a * a));
+  let nx = -dy / d, ny = dx / d;
+  if (nx * hint[0] + ny * hint[1] < 0) { nx = -nx; ny = -ny; }
+  return [A[0] + dx * a / d + nx * h, A[1] + dy * a / d + ny * h];
+}
+function applyPose(M, p, fc, hurt) {
+  const V = (pt, z = 0, dx = 0, dy = 0) => new THREE.Vector3(fc * (pt[0] + dx), -(pt[1] + dy), z);
+  const lerp2 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  const hip = p.hip, sh = p.sh;
+  const ux = sh[0] - hip[0], uy = sh[1] - hip[1], ul = Math.hypot(ux, uy) || 1, u = [ux / ul, uy / ul], fw = [-u[1], u[0]];
+  const at = (pt, f, g, z = 0) => V([pt[0] + fw[0] * f + u[0] * g, pt[1] + fw[1] * f + u[1] * g], z);
+  // 胴体
+  place(M.torso, V(hip), V(sh), 14, 19);
+  const q = M.torso.quaternion;
+  const cpos = lerp2(hip, sh, 0.82);
+  M.chest.position.copy(V(cpos)); M.chest.quaternion.copy(q); M.chest.scale.set(16, 15, 21);
+  M.hipS.position.copy(V(hip)); M.hipS.quaternion.copy(q); M.hipS.scale.set(14, 12, 19);
+  const bc = lerp2(hip, sh, 0.14);
+  place(M.belt, at(bc, 0, -4.5), at(bc, 0, 4.5), 15.8, 21);
+  M.knot.position.copy(at(bc, 15.5, 0)); M.knot.quaternion.copy(q); M.knot.scale.set(4.5, 6, 6);
+  M.tail1.position.copy(at(bc, 15, -9, 3)); M.tail1.quaternion.copy(q); M.tail1.scale.set(2.5, 13, 2);
+  M.tail2.position.copy(at(bc, 14, -8, -3.5)); M.tail2.quaternion.copy(q); M.tail2.scale.set(2.5, 11, 2);
+  const lt = lerp2(hip, sh, 0.86), lb = lerp2(hip, sh, 0.34);
+  place(M.lapA, at(lt, 13.2, 0, 8.5), at(lb, 14.9, 0, -1), 2.6);
+  place(M.lapB, at(lt, 13.2, 0, -8.5), at(lb, 14.9, 0, 1), 2.6);
+  // 頭
+  place(M.neck, V(sh, 0, 0, 2), V(p.head), 5.5);
+  M.head.position.copy(V(p.head)); M.head.scale.set(14, 15.2, 13.6);
+  M.hair.position.copy(V(p.head, 0, 0, 0.3)); M.hair.scale.set(15.2, 15.8, 14.4); M.hair.rotation.z = fc * 0.45;
+  const ey = hurt ? 1 : 2.4;
+  M.eyeA.position.copy(V(p.head, 5.2, 12.6, 1.5)); M.eyeB.position.copy(V(p.head, -5.2, 12.6, 1.5));
+  M.eyeA.scale.set(1.6, ey, 1.6); M.eyeB.scale.set(1.6, ey, 1.6);
+  M.nose.position.copy(V(p.head, 0, 14.2, -2)); M.nose.scale.set(2.4, 2.4, 2.4);
+  // 腕
+  [[p.hf, 16], [p.hb, -16]].forEach(([hand, z], i) => {
+    const A = M.arms[i], S = [sh[0] - u[0] * 3, sh[1] - u[1] * 3], e = ik(S, hand, 33, 33, [-0.35, 1]);
+    const s3 = V(S, z), e3 = V(e, z), h3 = V(hand, z);
+    A.sj.position.copy(s3); A.sj.scale.set(8.8, 8.8, 8.8);
+    place(A.up, s3, e3, 7.6);
+    A.ej.position.copy(e3); A.ej.scale.set(7, 7, 7);
+    place(A.lo, e3, h3, 6.4);
+    A.hand.position.copy(h3); A.hand.scale.set(6.6, 6.6, 6.6);
+  });
+  // 脚
+  [[p.ff, 9], [p.fb, -9]].forEach(([foot, z], i) => {
+    const L = M.legs[i], H = [hip[0], hip[1] + 2], ank = [foot[0], foot[1] - 6], k = ik(H, ank, 34, 34, [1, 0.3]);
+    const h3 = V(H, z), k3 = V(k, z), a3 = V(ank, z);
+    L.hj.position.copy(h3); L.hj.scale.set(11, 11, 11);
+    place(L.th, h3, k3, 10);
+    L.kj.position.copy(k3); L.kj.scale.set(8.6, 8.6, 8.6);
+    place(L.sh, k3, a3, 7.8);
+    const ang = Math.atan2(a3.y - k3.y, a3.x - k3.x) + PI / 2;
+    L.foot.position.set(a3.x + fc * 6 * Math.cos(ang), a3.y - 2 + 6 * Math.sin(ang), z);
+    L.foot.rotation.z = ang; L.foot.scale.set(12, 5.5, 7.2);
+  });
+}
+function poseModel(f) {
+  const M = f.model, p = getPose(f), fc = f.facing;
+  const tpOn = f.tp && (f.state === 'thrown' || f.state === 'throw');
+  const target = -0.38 * fc;
+  M.yaw = M.yaw === undefined ? target : M.yaw + (target - M.yaw) * 0.25;
+  M.root.rotation.y = M.yaw;
+  const z = f.idx === 0 ? 6 : -6;
+  if (tpOn) {
+    M.root.position.set(f.tp.x, 0, z); M.roll.position.set(0, -f.tp.y, 0); M.roll.rotation.z = -(fc * f.tp.phi); M.body.position.set(0, -60, 0);
+  } else {
+    M.root.position.set(f.x, 0, z); M.body.position.set(0, 0, 0);
+    if (f.state === 'down') { M.roll.position.set(0, 18, 0); M.roll.rotation.z = fc * PI / 2; }
+    else { M.roll.position.set(0, 0, 0); M.roll.rotation.z = 0; }
   }
-  ctx.fillStyle = '#f2ead4'; ctx.fillRect(W / 2 - 38, 80, 76, 130);
-  ctx.strokeStyle = '#5a1f1f'; ctx.lineWidth = 5; ctx.strokeRect(W / 2 - 38, 80, 76, 130);
-  ctx.fillStyle = '#111'; ctx.font = `bold 60px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('柔', W / 2, 146);
-  ctx.fillStyle = '#2a1c10'; ctx.fillRect(0, 0, W, 22);
-  // 畳
-  const tg = ctx.createLinearGradient(0, GROUND - 30, 0, H);
-  tg.addColorStop(0, '#9fb36a'); tg.addColorStop(1, '#6d8244');
-  ctx.fillStyle = tg; ctx.fillRect(0, GROUND - 30, W, H - GROUND + 30);
-  ctx.strokeStyle = '#3f5226'; ctx.lineWidth = 3;
-  for (let x = 0; x <= W; x += 160) { ctx.beginPath(); ctx.moveTo(x, GROUND - 30); ctx.lineTo(x - 60 + (x - W / 2) * 0.25, H); ctx.stroke(); }
-  ctx.beginPath(); ctx.moveTo(0, GROUND - 30); ctx.lineTo(W, GROUND - 30); ctx.stroke();
-  ctx.fillStyle = '#2a1c10'; ctx.fillRect(0, GROUND - 34, W, 6);
+  applyPose(M, p, fc, f.state === 'hit' || f.state === 'thrown');
+}
+function init3D() {
+  if (typeof THREE === 'undefined') return;
+  try {
+    const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gl'), antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(W, H, false);
+    renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    const S = new THREE.Scene(); S.background = new THREE.Color(0x2a1c10);
+    const camera = new THREE.PerspectiveCamera(35, W / H, 10, 4000);
+    S.add(new THREE.HemisphereLight(0xfff4e0, 0x6b5a3a, 0.75));
+    const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+    sun.position.set(260, 760, 560); sun.target.position.set(480, 0, 0);
+    sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004;
+    Object.assign(sun.shadow.camera, { left: -700, right: 700, top: 500, bottom: -500, near: 100, far: 2200 });
+    S.add(sun); S.add(sun.target);
+    const warm = new THREE.PointLight(0xffd9a0, 0.35, 1600); warm.position.set(480, 460, 200); S.add(warm);
+    buildDojo(S);
+    players.forEach(p => { p.model = buildModel(p.ch, S); });
+    Object.assign(G3, { ok: true, renderer, S, camera });
+  } catch (e) { console.error(e); }
+}
+function updateCamera() {
+  const [a, b] = players;
+  let tx = 480, d = 760;
+  if (scene !== 'title') {
+    const gap = Math.abs(a.x - b.x);
+    tx = 480 + ((a.x + b.x) / 2 - 480) * 0.5;
+    d = 760 - Math.max(0, Math.min(1, (520 - gap) / 520)) * 150;
+  }
+  G3.cx += (tx - G3.cx) * 0.08; G3.cd += (d - G3.cd) * 0.06;
+  const sx = (Math.random() - 0.5) * shake * 0.9, sy = (Math.random() - 0.5) * shake * 0.9;
+  G3.camera.position.set(G3.cx + sx, 215 + sy, G3.cd);
+  G3.camera.lookAt(G3.cx + sx, 112, 0);
+  G3.camera.updateMatrixWorld();
+}
+function render3D() {
+  updateCamera();
+  players.forEach(poseModel);
+  G3.renderer.render(G3.S, G3.camera);
+}
+// 地面基準の座標（x, y:上がマイナス）を画面座標へ
+const _pv = HAS3 ? new THREE.Vector3() : null;
+function scr(x, y) {
+  _pv.set(x, -y, 0).project(G3.camera);
+  return { x: (_pv.x * 0.5 + 0.5) * W, y: (-_pv.y * 0.5 + 0.5) * H, k: 760 / G3.camera.position.distanceTo(_pv.set(x, -y, 0)) };
 }
 
-function limb(a, b, w, col) {
-  ctx.strokeStyle = col; ctx.lineWidth = w; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
-}
 function getPose(f) {
   if (f.state === 'throw' && f.pose) return f.pose;
   if (f.state === 'thrown' || f.state === 'down') return POSE.down;
@@ -517,48 +695,10 @@ function getPose(f) {
   }
   return p;
 }
-function drawFighter(f) {
-  const c = f.ch, p = getPose(f);
-  const tpOn = f.tp && (f.state === 'thrown' || f.state === 'throw');
-  const sx = tpOn ? f.tp.x : f.x;
-  // 影
-  ctx.fillStyle = 'rgba(0,0,0,.28)';
-  ctx.beginPath(); ctx.ellipse(sx, GROUND, tpOn && f.tp.y > -40 ? 62 : 38, 9, 0, 0, 7); ctx.fill();
-
-  ctx.save();
-  if (tpOn) {
-    ctx.translate(f.tp.x, GROUND + f.tp.y);
-    ctx.rotate(f.facing * f.tp.phi);
-    ctx.scale(f.facing, 1);
-    ctx.translate(0, 60);
-  } else {
-    ctx.translate(f.x, GROUND); ctx.scale(f.facing, 1);
-    if (f.state === 'down') { ctx.translate(0, -18); ctx.rotate(-PI / 2); }
-  }
-  limb(p.sh, p.hb, 12, c.shade);
-  limb([p.hip[0] - 5, p.hip[1]], p.fb, 15, c.shade);
-  limb(p.hip, p.sh, 36, c.gi);
-  ctx.save(); ctx.strokeStyle = c.belt; ctx.lineWidth = 9; ctx.lineCap = 'butt';
-  const bx = p.hip[0] + (p.sh[0] - p.hip[0]) * 0.12, by = p.hip[1] + (p.sh[1] - p.hip[1]) * 0.12;
-  ctx.beginPath(); ctx.moveTo(bx - 18, by); ctx.lineTo(bx + 18, by); ctx.stroke(); ctx.restore();
-  limb([p.sh[0] - 6, p.sh[1] + 6], [p.sh[0] + 6, p.sh[1] + 30], 5, c.shade); // 襟
-  ctx.fillStyle = c.skin; ctx.beginPath(); ctx.arc(p.head[0], p.head[1], 14, 0, 7); ctx.fill();
-  ctx.fillStyle = c.hair; ctx.beginPath(); ctx.arc(p.head[0], p.head[1], 14.5, PI * 0.95, PI * 2.1); ctx.fill();
-  ctx.fillRect(p.head[0] - 14, p.head[1] - 4, 7, 8);
-  ctx.fillStyle = '#111'; ctx.fillRect(p.head[0] + 5, p.head[1] - 2, 3, (f.state === 'hit' || f.state === 'thrown') ? 1 : 4);
-  limb([p.hip[0] + 5, p.hip[1]], p.ff, 16, c.gi);
-  ctx.fillStyle = c.skin;
-  ctx.beginPath(); ctx.arc(p.ff[0] + 3, p.ff[1], 7, 0, 7); ctx.fill();
-  ctx.beginPath(); ctx.arc(p.fb[0] + 3, p.fb[1], 7, 0, 7); ctx.fill();
-  limb(p.sh, p.hf, 13, c.gi);
-  ctx.beginPath(); ctx.arc(p.hf[0], p.hf[1], 7, 0, 7); ctx.fill();
-  ctx.beginPath(); ctx.arc(p.hb[0], p.hb[1], 6, 0, 7); ctx.fill();
-  ctx.restore();
-}
 function drawFx() {
   for (const e of fx) {
-    const k = e.t / 18;
-    ctx.save(); ctx.translate(e.x, GROUND + e.y);
+    const k = e.t / 18, s = scr(e.x, e.y);
+    ctx.save(); ctx.translate(s.x, s.y); ctx.scale(s.k, s.k);
     ctx.globalAlpha = 1 - k;
     if (e.kind === 'block') {
       ctx.strokeStyle = '#9ad'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(0, 0, 8 + k * 22, 0, 7); ctx.stroke();
@@ -574,11 +714,17 @@ function drawFx() {
   }
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   for (const e of texts) {
-    ctx.globalAlpha = 1 - e.t / 50; ctx.font = `bold 26px ${FONT}`;
-    ctx.lineWidth = 5; ctx.strokeStyle = '#000'; ctx.strokeText(e.s, e.x, GROUND + e.y - e.t * 0.6);
-    ctx.fillStyle = e.col; ctx.fillText(e.s, e.x, GROUND + e.y - e.t * 0.6);
+    const s = scr(e.x, e.y), y = s.y - e.t * 0.6;
+    ctx.globalAlpha = 1 - e.t / 50; ctx.font = `bold ${26 * s.k}px ${FONT}`;
+    ctx.lineWidth = 5; ctx.strokeStyle = '#000'; ctx.strokeText(e.s, s.x, y);
+    ctx.fillStyle = e.col; ctx.fillText(e.s, s.x, y);
   }
   ctx.globalAlpha = 1;
+}
+function drawVignette() {
+  const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, H * 1.05);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.45)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
 }
 function bar(x, w, hp, rtl, name, wins, wz) {
   ctx.fillStyle = '#000'; ctx.fillRect(x - 3, 21, w + 6, 30);
@@ -615,8 +761,7 @@ function bigText(t, y, size, col) {
   ctx.fillStyle = col; ctx.fillText(t, W / 2, y);
 }
 function drawTitle() {
-  drawBG();
-  ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(0,0,0,.62)'; ctx.fillRect(0, 0, W, H);
   bigText('柔道ファイター', 100, 80, '#fff');
   ctx.fillStyle = '#ffd23a'; ctx.font = `bold 22px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('崩して、投げて、一本を取れ！', W / 2, 168);
@@ -632,14 +777,12 @@ function drawTitle() {
 }
 
 function draw() {
-  ctx.save();
   ctx.clearRect(0, 0, W, H);
-  if (scene === 'title') { drawTitle(); ctx.restore(); return; }
-  if (shake > 0.5) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
-  drawBG();
-  [...players].sort((a, b) => (a.state === 'thrown') - (b.state === 'thrown')).forEach(drawFighter);
+  if (!G3.ok) { ctx.fillStyle = '#222'; ctx.fillRect(0, 0, W, H); bigText('3Dの読み込みに失敗しました', 250, 40, '#fff'); bigText('インターネット接続を確認して再読み込みしてください', 310, 22, '#ccc'); return; }
+  render3D();
+  if (scene === 'title') { drawTitle(); return; }
   drawFx();
-  ctx.restore();
+  drawVignette();
   drawHUD();
   if (callout) {
     const k = Math.min(1, callout.t / 6);
@@ -668,6 +811,7 @@ function loop(now) {
   draw();
   requestAnimationFrame(loop);
 }
+init3D();
 requestAnimationFrame(loop);
 
 // テスト用に公開
