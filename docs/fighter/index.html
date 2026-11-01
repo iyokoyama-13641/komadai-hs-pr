@@ -39,7 +39,7 @@
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r149/three.min.js"></script>
+<script src="three.min.js"></script>
 <script>
 "use strict";
 const cv = document.getElementById('c'), ctx = cv.getContext('2d');
@@ -625,7 +625,7 @@ function poseModel(f) {
   applyPose(M, p, fc, f.state === 'hit' || f.state === 'thrown');
 }
 function init3D() {
-  if (typeof THREE === 'undefined') return;
+  if (typeof THREE === 'undefined') { G3.err = 'three.js が読み込めませんでした'; return; }
   try {
     const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gl'), antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -643,7 +643,7 @@ function init3D() {
     buildDojo(S);
     players.forEach(p => { p.model = buildModel(p.ch, S); });
     Object.assign(G3, { ok: true, renderer, S, camera });
-  } catch (e) { console.error(e); }
+  } catch (e) { console.error(e); G3.err = String(e && e.message || e); }
 }
 function updateCamera() {
   const [a, b] = players;
@@ -778,7 +778,7 @@ function drawTitle() {
 
 function draw() {
   ctx.clearRect(0, 0, W, H);
-  if (!G3.ok) { ctx.fillStyle = '#222'; ctx.fillRect(0, 0, W, H); bigText('3Dの読み込みに失敗しました', 250, 40, '#fff'); bigText('インターネット接続を確認して再読み込みしてください', 310, 22, '#ccc'); return; }
+  if (!G3.ok) { ctx.fillStyle = '#222'; ctx.fillRect(0, 0, W, H); bigText('3Dの読み込みに失敗しました', 250, 40, '#fff'); bigText(G3.err || '', 310, 22, '#ccc'); bigText('ページを再読み込みしてください（WebGL対応のブラウザが必要です）', 360, 20, '#aaa'); return; }
   render3D();
   if (scene === 'title') { drawTitle(); return; }
   drawFx();
