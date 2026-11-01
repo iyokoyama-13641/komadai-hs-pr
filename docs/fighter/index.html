@@ -615,6 +615,38 @@ function orientHand(g, dir, hint) {
   _hm.makeBasis(_hx, _hy, _hz); g.quaternion.setFromRotationMatrix(_hm);
 }
 
+// 髪：頭皮（薄い殻）＋毛束を多数（InstancedMesh）。頭の単位球の座標で作り、頭のスケールで拡大して使う
+function buildHair(hairColor, S0) {
+  const g = new THREE.Group();
+  const col = new THREE.Color(hairColor);
+  const mat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.42, sheen: 1, sheenColor: col.clone().lerp(new THREE.Color(0xffffff), 0.35), sheenRoughness: 0.35, envMapIntensity: 0.5 });
+  const scalpMat = new THREE.MeshStandardMaterial({ color: col.clone().multiplyScalar(0.75), roughness: 0.6, envMapIntensity: 0.3 });
+  const ALPHA = 0.85, TH = PI * 0.56;
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(1.035, 32, 18, 0, PI * 2, 0, TH), scalpMat);
+  cap.rotation.z = ALPHA; cap.castShadow = true; g.add(cap);
+  const axis = new THREE.Vector3(-Math.sin(ALPHA), Math.cos(ALPHA), 0), cosT = Math.cos(TH);
+  const geo = new THREE.CylinderGeometry(0.055, 0.1, 1, 5, 1); geo.translate(0, 0.5, 0);
+  const N = 1500, inst = new THREE.InstancedMesh(geo, mat, N);
+  let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), pos = new THREE.Vector3(), sc = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), c = new THREE.Color();
+  let n = 0, guard = 0;
+  while (n < N && guard++ < 20000) {
+    const d = new THREE.Vector3(rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1); if (d.lengthSq() > 1 || d.lengthSq() < 0.05) continue; d.normalize();
+    const dot = d.dot(axis); if (dot < cosT + 0.03) continue;
+    // 生え際：額は高め、こめかみ・襟足は低め
+    if (d.x > 0.45 && d.y < 0.55 + 0.25 * Math.abs(d.z)) continue;
+    const t = d.clone().addScaledVector(axis, -dot); const tl = t.length(); if (tl > 1e-3) t.divideScalar(tl);
+    const swirl = new THREE.Vector3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).multiplyScalar(0.5);
+    const v = d.clone().multiplyScalar(0.22).addScaledVector(t, 1.1 * Math.min(1, tl * 2.6)).add(swirl).add(new THREE.Vector3(0, -0.1, 0)).normalize();
+    const len = 0.08 + rnd() * 0.08 + (d.x > 0.3 && d.y > 0.5 ? 0.05 : 0);
+    pos.copy(d).multiplyScalar(1.01); q.setFromUnitVectors(up, v); sc.set(1, len, 1);
+    m4.compose(pos, q, sc); inst.setMatrixAt(n, m4);
+    const k = 0.7 + rnd() * 0.65; inst.setColorAt(n, c.copy(col).multiplyScalar(k)); n++;
+  }
+  inst.count = n; inst.instanceMatrix.needsUpdate = true; if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
+  inst.castShadow = true; g.add(inst);
+  return g;
+}
 function buildModel(ch, S) {
   const nrm = getClothNormal();
   const skinM = (c) => new THREE.MeshPhysicalMaterial({ color: c, roughness: 0.5, clearcoat: 0.12, clearcoatRoughness: 0.55, sheen: 0.7, sheenColor: new THREE.Color(0xff9a80), sheenRoughness: 0.5, envMapIntensity: 0.5, emissive: new THREE.Color(c).multiplyScalar(0.1) });
@@ -624,7 +656,6 @@ function buildModel(ch, S) {
   const tap = (rt, rb) => new THREE.CylinderGeometry(rt, rb, 1, 22, 1);
   const cyl = tap(1, 1), sph = new THREE.SphereGeometry(1, 28, 20), box = new THREE.BoxGeometry(1, 1, 1);
   const gTorso = tap(1.0, 0.84), gUp = tap(0.8, 1.0), gLo = tap(0.7, 0.9), gTh = tap(0.74, 1.0), gSh = tap(0.6, 0.9), gNeck = tap(0.86, 1.1);
-  const hairGeo = new THREE.SphereGeometry(1, 28, 16, 0, PI * 2, 0, PI * 0.56);
   const root = new THREE.Group(), roll = new THREE.Group(), body = new THREE.Group();
   root.add(roll); roll.add(body); S.add(root);
   const add = (geo, mat) => { const me = new THREE.Mesh(geo, mat); me.castShadow = true; me.receiveShadow = true; body.add(me); return me; };
@@ -632,7 +663,7 @@ function buildModel(ch, S) {
   M.torso = add(gTorso, m.gi); M.chest = add(sph, m.gi); M.hipS = add(sph, m.gi);
   M.belt = add(cyl, m.belt); M.knot = add(box, m.belt); M.tail1 = add(box, m.belt); M.tail2 = add(box, m.belt);
   M.lapA = add(cyl, m.lap); M.lapB = add(cyl, m.lap);
-  M.neck = add(gNeck, m.skin); M.head = add(sph, m.skin); M.jaw = add(sph, m.skin); M.hair = add(hairGeo, m.hair);
+  M.neck = add(gNeck, m.skin); M.head = add(sph, m.skin); M.jaw = add(sph, m.skin); M.hairG = buildHair(ch.hair); body.add(M.hairG);
   M.eyeWA = add(sph, m.white); M.eyeWB = add(sph, m.white);
   M.eyeA = add(sph, m.dark); M.eyeB = add(sph, m.dark); M.nose = add(sph, m.skin);
   M.browA = add(box, m.dark); M.browB = add(box, m.dark); M.mouth = add(box, m.mouth);
@@ -673,7 +704,7 @@ function applyBody(M, p, fc, hurt, shout) {
   M.aSleeve.position.copy(V([sh[0] - u[0] * 14 + fw[0] * 3, sh[1] - u[1] * 14 + fw[1] * 3], 23));
   place(M.neck, V(sh, 0, 0, 2), V(p.head), 5.5);
   M.head.position.copy(V(p.head)); M.head.scale.set(14, 15.2, 13.6);
-  M.hair.position.copy(V(p.head, 0, -0.6, 0)); M.hair.scale.set(16.2, 17.4, 15.6); M.hair.rotation.z = fc * 0.6;
+  M.hairG.position.copy(V(p.head, 0, 0, 0)); M.hairG.scale.set(fc * 14, 15.2, 13.6);
   const ey = hurt ? 1 : 2.4;
   M.eyeWA.position.copy(V(p.head, 5.2, 12.0, 1.5)); M.eyeWB.position.copy(V(p.head, -5.2, 12.0, 1.5));
   M.eyeWA.scale.set(2.2, ey * 0.95 + 0.5, 2.5); M.eyeWB.scale.set(2.2, ey * 0.95 + 0.5, 2.5);
