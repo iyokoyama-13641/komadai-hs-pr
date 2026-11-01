@@ -9,12 +9,13 @@
     -webkit-user-select:none;user-select:none;touch-action:none}
   #wrap{max-width:960px;margin:0 auto;display:flex;flex-direction:column;min-height:100%}
   canvas{width:100%;display:block;background:#000;aspect-ratio:16/9}
-  #help{font-size:12px;padding:6px 10px;color:#aaa;line-height:1.6}
+  #help{font-size:12px;padding:6px 10px;color:#aaa;line-height:1.7}
+  #help b{color:#ffd23a}
   #pad{display:none;justify-content:space-between;padding:8px 10px 16px}
   #pad .grp{display:grid;gap:8px}
-  #dpad{grid-template-columns:repeat(3,64px);grid-template-rows:repeat(2,64px)}
-  #acts{grid-template-columns:repeat(2,84px);grid-template-rows:repeat(2,64px)}
-  #pad button{border:2px solid #666;background:#2a2a2a;color:#fff;border-radius:12px;font-size:18px;font-weight:bold;touch-action:none}
+  #dpad{grid-template-columns:repeat(3,70px);grid-template-rows:64px}
+  #acts{grid-template-columns:repeat(3,76px);grid-template-rows:64px}
+  #pad button{border:2px solid #666;background:#2a2a2a;color:#fff;border-radius:12px;font-size:16px;font-weight:bold;touch-action:none}
   #pad button.on{background:#c0392b}
   @media (pointer:coarse){#pad{display:flex}#help{display:none}}
 </style>
@@ -23,17 +24,16 @@
 <div id="wrap">
   <canvas id="c" width="960" height="540"></canvas>
   <div id="help">
-    <b>1P</b>: A/D=移動 W=ジャンプ S=しゃがみ（後ろ入力でガード）J=パンチ K=キック L=<b>投げ</b>（近づいて）I=必殺技（↓→+Jでも出ます）<br>
-    <b>2P</b>: ←/→=移動 ↑=ジャンプ ↓=しゃがみ ,=パンチ .=キック /=投げ ;=必殺技　／　CPU戦では矢印キー+Z/X/C/Vでも操作可　／　P=ポーズ
+    <b>1P</b>: A/D=移動 S=腰を落とす（後ろ入力でガード） J=突き放し K=足払い L=<b>投げ</b><br>
+    <b>投げ技</b>（相手に近づいて L）: そのまま=<b>大外刈</b>　前+L=<b>背負い投げ</b>　後ろ+L=<b>巴投げ</b>　S+L=<b>内股</b>　／　<b>2P</b>: ←→=移動 ↓=腰を落とす ,=突き放し .=足払い /=投げ　／　P=ポーズ<br>
+    ルール: 技あり×2=合わせ技一本。崩れた相手（突き放し・足払いが当たった直後）を投げると一本。腰を落とすと投げに耐えられ、足払いは腰を落とした相手に効きます。
   </div>
   <div id="pad">
     <div class="grp" id="dpad">
-      <span></span><button data-k="up">▲</button><span></span>
-      <button data-k="left">◀</button><button data-k="down">▼</button><button data-k="right">▶</button>
+      <button data-k="left">◀</button><button data-k="down">腰を落とす</button><button data-k="right">▶</button>
     </div>
     <div class="grp" id="acts">
-      <button data-k="punch">パンチ</button><button data-k="kick">キック</button>
-      <button data-k="throw">投げ</button><button data-k="special">必殺</button>
+      <button data-k="punch">突き放し</button><button data-k="kick">足払い</button><button data-k="throw">投げ</button>
     </div>
   </div>
 </div>
@@ -43,6 +43,7 @@
 const cv = document.getElementById('c'), ctx = cv.getContext('2d');
 const W = 960, H = 540, GROUND = 460, WALL = 40;
 const FONT = '"Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif';
+const PI = Math.PI;
 
 /* ---------- 音 ---------- */
 let ac = null;
@@ -60,78 +61,115 @@ function snd(freq, dur, type = 'square', vol = 0.07, slide = 0) {
 const SFX = {
   swing: () => snd(500, 0.08, 'triangle', 0.04, -300),
   hit:   () => snd(220, 0.12, 'sawtooth', 0.09, -150),
-  big:   () => { snd(120, 0.25, 'sawtooth', 0.12, -80); snd(300, 0.1, 'square', 0.06, -200); },
   block: () => snd(700, 0.05, 'square', 0.04, -200),
-  fire:  () => snd(300, 0.3, 'sawtooth', 0.05, 500),
-  throw: () => { snd(180, 0.3, 'square', 0.08, -120); },
-  ko:    () => snd(160, 0.8, 'sawtooth', 0.12, -140),
+  throw: () => snd(300, 0.25, 'triangle', 0.05, -150),
+  slam:  () => { snd(90, 0.35, 'sawtooth', 0.16, -60); snd(200, 0.12, 'square', 0.08, -150); },
+  ippon: () => { snd(523, 0.15); setTimeout(() => snd(659, 0.15), 120); setTimeout(() => snd(784, 0.4), 240); },
   ui:    () => snd(660, 0.06, 'square', 0.05),
-  fight: () => { snd(440, 0.1); setTimeout(() => snd(660, 0.18), 100); },
+  start: () => { snd(440, 0.1); setTimeout(() => snd(660, 0.18), 100); },
 };
 
 /* ---------- 技データ（フレームは60fps） ---------- */
-// su=発生 ac=持続 rec=硬直 / 判定は足元基準・前方への距離(rx0..rx1)と高さ(y0..y1)
+// type: mid=突き放し（立ってガードでも腰を落としてガードでも防げる）／low=足払い（立ってガードで防ぐ。腰を落とした相手には効く）
 const ATK = {
-  punch:  { su: 4, ac: 4, rec: 9,  dmg: 6,  rx0: 15, rx1: 75,  y0: -125, y1: -88, type: 'mid',  stun: 15, push: 4 },
-  kick:   { su: 8, ac: 5, rec: 15, dmg: 11, rx0: 15, rx1: 100, y0: -112, y1: -58, type: 'mid',  stun: 19, push: 8 },
-  cpunch: { su: 4, ac: 4, rec: 8,  dmg: 5,  rx0: 15, rx1: 75,  y0: -80,  y1: -45, type: 'mid',  stun: 14, push: 3 },
-  sweep:  { su: 7, ac: 4, rec: 19, dmg: 9,  rx0: 15, rx1: 105, y0: -28,  y1: 0,   type: 'low',  stun: 20, push: 5, knockdown: true },
-  jpunch: { su: 3, ac: 0, rec: 0,  dmg: 7,  rx0: 10, rx1: 70,  y0: -105, y1: -50, type: 'high', stun: 16, push: 4, air: true },
-  jkick:  { su: 3, ac: 0, rec: 0,  dmg: 10, rx0: 10, rx1: 85,  y0: -80,  y1: -20, type: 'high', stun: 18, push: 6, air: true },
-  throw:  { su: 5, ac: 1, rec: 30, kind: 'throw', dmg: 18 },
-  fire:   { su: 14, ac: 1, rec: 26, kind: 'fire' },
+  punch: { su: 5, ac: 3, rec: 12, dmg: 5, rx0: 15, rx1: 80,  y0: -125, y1: -60, type: 'mid', stun: 32, push: 9, label: '突き放し' },
+  kick:  { su: 9, ac: 4, rec: 20, dmg: 7, rx0: 15, rx1: 100, y0: -30,  y1: 0,   type: 'low', stun: 36, push: 5, label: '足払い' },
+  throw: { su: 5, ac: 1, rec: 28, kind: 'throw' },
 };
-const FIRE = { dmg: 12, stun: 20, push: 7, chip: 2, type: 'mid', speed: 6.5 };
+
+/* ---------- 投げ技（アニメーション定義） ----------
+   uke / tori: [フレーム, 横位置(取りの前方が+), 体の中心の高さ, 回転(前方への宙返りが+)]
+   体の中心は立っているとき -60、地面に寝ると -18。回転は 3π/2（=270°）で背中から着地。 */
+const THROWS = {
+  seoi: { name: '背負い投げ', T: 60, imp: 42,
+    uke: [[0, 46, -60, 0], [8, 38, -60, 0], [16, 10, -88, 0.5], [26, -12, -128, 2.4], [36, -45, -82, 3.9], [42, -70, -18, 3 * PI / 2], [60, -70, -18, 3 * PI / 2]] },
+  osoto: { name: '大外刈', T: 50, imp: 28,
+    uke: [[0, 46, -60, 0], [8, 48, -60, -0.1], [18, 56, -62, -0.5], [24, 66, -60, -1.2], [28, 78, -34, -2.3], [33, 86, -18, -1.9], [38, 86, -18, -PI / 2], [50, 86, -18, -PI / 2]] },
+  tomoe: { name: '巴投げ', T: 76, imp: 48,
+    uke: [[0, 46, -60, 0], [8, 38, -60, 0.1], [16, 26, -70, 0.3], [24, 10, -108, 1.2], [34, -40, -155, 2.6], [46, -112, -34, 4.2], [52, -125, -18, 3 * PI / 2], [76, -125, -18, 3 * PI / 2]],
+    tori: [[0, 0, -60, 0], [8, 0, -60, 0], [16, -12, -45, -0.5], [24, -30, -26, -1.2], [32, -42, -18, -PI / 2], [76, -42, -18, -PI / 2]] },
+  uchi: { name: '内股', T: 62, imp: 42,
+    uke: [[0, 46, -60, 0], [8, 38, -62, 0], [16, 22, -92, 0.5], [26, 4, -150, 1.8], [34, -26, -130, 3.2], [42, -62, -18, 3 * PI / 2], [62, -62, -18, 3 * PI / 2]] },
+};
+function ease(u) { return u * u * (3 - 2 * u); }
+function interp(kfs, t) {
+  if (t <= kfs[0][0]) return kfs[0].slice(1);
+  for (let i = 1; i < kfs.length; i++) {
+    if (t <= kfs[i][0]) {
+      const a = kfs[i - 1], b = kfs[i], u = ease((t - a[0]) / (b[0] - a[0]));
+      return [a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u, a[3] + (b[3] - a[3]) * u];
+    }
+  }
+  return kfs[kfs.length - 1].slice(1);
+}
+
+/* ---------- ポーズ ---------- */
+const POSE = {
+  idle:   { hip: [0, -62], sh: [0, -110], head: [0, -132], hf: [34, -112], hb: [20, -98], ff: [24, 0], fb: [-20, 0] },
+  crouch: { hip: [0, -34], sh: [6, -72], head: [10, -93], hf: [36, -78], hb: [22, -66], ff: [32, 0], fb: [-24, 0] },
+  hit:    { hip: [-6, -62], sh: [-16, -108], head: [-24, -128], hf: [10, -80], hb: [-4, -76], ff: [18, 0], fb: [-24, 0] },
+  down:   { hip: [0, -50], sh: [0, -100], head: [0, -122], hf: [18, -80], hb: [8, -70], ff: [20, -14], fb: [-16, -6] },
+  grab:   { hip: [0, -62], sh: [6, -108], head: [10, -130], hf: [46, -98], hb: [42, -88], ff: [30, 0], fb: [-22, 0] },
+  seoi:   { hip: [-4, -46], sh: [16, -82], head: [34, -92], hf: [34, -62], hb: [26, -56], ff: [30, 0], fb: [-34, 0] },
+  tomoe:  { hip: [0, -56], sh: [0, -104], head: [0, -126], hf: [46, -100], hb: [42, -92], ff: [40, -60], fb: [-14, 0] },
+  osoto: e => ({ hip: [0, -62], sh: [10 + 8 * e, -108], head: [18 + 12 * e, -128], hf: [58, -108], hb: [50, -100], ff: [26, 0], fb: [-20 - 52 * e, -4 - 52 * e] }),
+  uchi:  e => ({ hip: [2, -62], sh: [16 + 6 * e, -102], head: [28 + 8 * e, -120], hf: [52, -104], hb: [44, -96], ff: [22, 0], fb: [-30 - 36 * e, -10 - 58 * e] }),
+};
+// 取り（投げる側）のポーズと向き。向きは s（相手方向）に対する符号を返す
+function toriPose(name, t) {
+  const ramp = (a, b, c, d) => t < a ? 0 : t < b ? (t - a) / (b - a) : t < c ? 1 : t < d ? 1 - (t - c) / (d - c) : 0;
+  if (name === 'seoi') return t < 10 ? { p: POSE.grab, face: 1 } : t < 52 ? { p: POSE.seoi, face: -1 } : { p: POSE.idle, face: -1 };
+  if (name === 'osoto') return t < 8 ? { p: POSE.grab, face: 1 } : t < 42 ? { p: POSE.osoto(ramp(8, 26, 28, 42)), face: 1 } : { p: POSE.idle, face: 1 };
+  if (name === 'uchi') return t < 8 ? { p: POSE.grab, face: 1 } : t < 48 ? { p: POSE.uchi(ramp(8, 30, 32, 48)), face: 1 } : { p: POSE.idle, face: 1 };
+  if (name === 'tomoe') return t < 10 ? { p: POSE.grab, face: 1 } : { p: POSE.tomoe, face: 1 };
+  return { p: POSE.idle, face: 1 };
+}
 
 /* ---------- キャラクター ---------- */
 const CHARS = [
   { name: '柔', gi: '#f4f4f0', shade: '#cfcfc6', belt: '#222', skin: '#e8b48a', hair: '#1a1a1a', band: null },
-  { name: '黒帯', gi: '#2f5fa8', shade: '#244a84', belt: '#e8c23a', skin: '#d9a073', hair: '#2a1a10', band: '#e8c23a' },
+  { name: '黒帯', gi: '#2f5fa8', shade: '#244a84', belt: '#e8c23a', skin: '#d9a073', hair: '#2a1a10', band: null },
 ];
 
 class Fighter {
-  constructor(idx) { this.idx = idx; this.ch = CHARS[idx]; this.wins = 0; this.inp = { held: {}, press: {} }; this.cmd = []; }
+  constructor(idx) { this.idx = idx; this.ch = CHARS[idx]; this.wins = 0; this.inp = { held: {}, press: {} }; this.reset(); }
   reset() {
-    this.x = this.idx === 0 ? 300 : 660; this.y = 0; this.vx = 0; this.vy = 0;
+    this.x = this.idx === 0 ? 300 : 660; this.vx = 0;
     this.facing = this.idx === 0 ? 1 : -1;
-    this.hp = 100; this.state = 'idle'; this.t = 0; this.stun = 0; this.atk = null; this.hitDone = false;
-    this.crouch = false; this.lying = false; this.wt = 0; this.cmd = []; this.cmdLast = ''; this.cmdFrame = 0;
+    this.hp = 100; this.wz = 0; this.state = 'idle'; this.t = 0; this.stun = 0; this.atk = null; this.hitDone = false;
+    this.crouch = false; this.lying = false; this.wt = 0; this.tp = null; this.pose = null; this.th = null; this.thName = 'osoto';
   }
-  get air() { return this.y < 0; }
-  get actionable() { return this.state === 'idle'; }
   hurt() { // 当たり判定（足元基準の矩形）
-    const h = this.crouch && !this.air ? 72 : 125;
-    return { x0: this.x - 24, x1: this.x + 24, y0: this.y - h, y1: this.y };
+    const h = this.crouch ? 72 : 125;
+    return { x0: this.x - 24, x1: this.x + 24, y0: -h, y1: 0 };
   }
 }
 
 /* ---------- ゲーム状態 ---------- */
 let scene = 'title', mode = 'cpu', level = 1, menuSel = 0;
 const players = [new Fighter(0), new Fighter(1)];
-let projs = [], fx = [], frame = 0, hitstop = 0, shake = 0, paused = false;
-let round = 1, timeLeft = 99, timeTick = 0, phaseT = 0, banner = '', winnerMsg = '';
+let fx = [], texts = [], frame = 0, hitstop = 0, shake = 0, paused = false, callout = null;
+let round = 1, timeLeft = 90, timeTick = 0, phaseT = 0, banner = '', winnerMsg = '';
 const LEVELS = [
-  { label: 'かんたん', think: [18, 32], def: 0.25, agg: 0.55 },
-  { label: 'ふつう',   think: [10, 20], def: 0.5,  agg: 0.8 },
-  { label: 'つよい',   think: [5, 11],  def: 0.78, agg: 1.0 },
+  { label: 'かんたん', think: [20, 34], def: 0.25, agg: 0.55 },
+  { label: 'ふつう',   think: [11, 22], def: 0.5,  agg: 0.8 },
+  { label: 'つよい',   think: [6, 12],  def: 0.78, agg: 1.0 },
 ];
 const ai = { t: 0 };
+const nameOf = f => f.idx === 0 ? '1P' : (mode === 'cpu' ? 'CPU' : '2P');
 
-function startMatch() {
-  players.forEach(p => p.wins = 0);
-  round = 1; startRound();
-}
+function startMatch() { players.forEach(p => p.wins = 0); round = 1; startRound(); }
 function startRound() {
   players.forEach(p => p.reset());
-  projs = []; fx = []; timeLeft = 99; timeTick = 0; hitstop = 0; shake = 0;
-  scene = 'intro'; phaseT = 0; ai.t = 20;
-  banner = 'ROUND ' + round;
+  fx = []; texts = []; callout = null; timeLeft = 90; timeTick = 0; hitstop = 0; shake = 0;
+  scene = 'intro'; phaseT = 0; ai.t = 25;
+  banner = round + '本目';
 }
 
 /* ---------- 入力 ---------- */
-const K1 = { KeyA: 'left', KeyD: 'right', KeyW: 'up', KeyS: 'down', KeyJ: 'punch', KeyK: 'kick', KeyL: 'throw', KeyI: 'special' };
-const K2 = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Comma: 'punch', Period: 'kick', Slash: 'throw', Semicolon: 'special' };
-const K1X = { KeyZ: 'punch', KeyX: 'kick', KeyC: 'throw', KeyV: 'special' };
+const K1 = { KeyA: 'left', KeyD: 'right', KeyS: 'down', KeyJ: 'punch', KeyK: 'kick', KeyL: 'throw' };
+const K2 = { ArrowLeft: 'left', ArrowRight: 'right', ArrowDown: 'down', Comma: 'punch', Period: 'kick', Slash: 'throw' };
+const K1X = { KeyZ: 'punch', KeyX: 'kick', KeyC: 'throw' };
 
 function setAct(p, act, down) {
   const inp = players[p].inp;
@@ -156,16 +194,14 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => { const t = keyTarget(e.code); if (t) setAct(t[0], t[1], false); });
 addEventListener('blur', () => players.forEach(p => { p.inp.held = {}; }));
 
-// タッチ操作
 document.querySelectorAll('#pad button').forEach(b => {
   const k = b.dataset.k;
-  const on = e => { e.preventDefault(); b.classList.add('on'); if (scene === 'title') { return; } setAct(0, k, true); };
+  const on = e => { e.preventDefault(); b.classList.add('on'); setAct(0, k, true); };
   const off = e => { e.preventDefault(); b.classList.remove('on'); setAct(0, k, false); };
   b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off);
   b.addEventListener('pointercancel', off); b.addEventListener('pointerleave', off);
 });
 
-// メニュー
 const MENU = () => [
   { text: 'ひとりで対戦（CPU）', act: () => { mode = 'cpu'; startMatch(); } },
   { text: 'ふたりで対戦', act: () => { mode = '2p'; startMatch(); } },
@@ -183,238 +219,243 @@ cv.addEventListener('pointerdown', e => {
   const r = cv.getBoundingClientRect();
   const x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
   if (scene === 'title') {
-    MENU().forEach((it, i) => { const by = 270 + i * 70; if (x > 280 && x < 680 && y > by && y < by + 56) { menuSel = i; SFX.ui(); it.act(); } });
+    MENU().forEach((it, i) => { const by = 250 + i * 66; if (x > 280 && x < 680 && y > by && y < by + 54) { menuSel = i; SFX.ui(); it.act(); } });
   } else if (scene === 'matchEnd') { SFX.ui(); startMatch(); }
 });
 
-/* ---------- コマンド入力（↓→ + パンチ） ---------- */
-function trackCmd(f) {
-  const h = f.inp.held, fw = f.facing === 1 ? 'right' : 'left';
-  let tok = '';
-  if (h.down) tok = h[fw] ? 'DF' : 'D'; else if (h[fw]) tok = 'F';
-  if (tok !== f.cmdLast) { f.cmd.push({ tok, fr: frame }); f.cmdLast = tok; if (f.cmd.length > 6) f.cmd.shift(); }
-}
-function fireCommand(f) {
-  const c = f.cmd.filter(e => frame - e.fr < 28);
-  const iD = c.findIndex(e => e.tok === 'D' || e.tok === 'DF');
-  if (iD < 0) return false;
-  return c.slice(iD + 1).some(e => e.tok === 'DF' || e.tok === 'F');
-}
-
 /* ---------- 攻撃・被弾 ---------- */
 function startAttack(f, name) {
-  f.state = 'attack'; f.atk = name; f.t = 0; f.hitDone = false;
-  if (!ATK[name].air) f.vx = 0;
-  SFX.swing();
+  f.state = 'attack'; f.atk = name; f.t = 0; f.hitDone = false; f.vx = 0; f.crouch = false;
+  if (name !== 'throw') SFX.swing();
+}
+function pickThrow(f) {
+  const h = f.inp.held, fw = f.facing === 1 ? 'right' : 'left', bk = f.facing === 1 ? 'left' : 'right';
+  if (h.down) return 'uchi';
+  if (h[fw]) return 'seoi';
+  if (h[bk]) return 'tomoe';
+  return 'osoto';
 }
 function overlap(a, b) { return a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0; }
 function backHeld(d) { return d.inp.held[d.facing === 1 ? 'left' : 'right']; }
+const untouchable = f => ['down', 'thrown', 'throw'].includes(f.state);
+function popText(x, y, s, col) { texts.push({ x, y, t: 0, s, col: col || '#fff' }); }
 
-// a が d に攻撃 spec を当てる。戻り値: 'hit' | 'block' | null
 function resolveHit(a, d, spec, dir) {
-  if (d.state === 'down' || d.hp <= 0) return null;
-  const blocked = !d.air && (d.state === 'idle' || d.state === 'block') && backHeld(d) &&
-    !(spec.type === 'low' && !d.crouch) && !(spec.type === 'high' && d.crouch);
-  const cx = (a.x + d.x) / 2, cy = d.y - (d.crouch ? 45 : 90);
+  if (untouchable(d)) return null;
+  const blocked = (d.state === 'idle' || d.state === 'block') && backHeld(d) && !(spec.type === 'low' && d.crouch);
   if (blocked) {
-    d.state = 'block'; d.t = 0; d.stun = Math.max(8, spec.stun - 5); d.vx = dir * spec.push * 0.8;
-    if (spec.chip) d.hp = Math.max(1, d.hp - spec.chip);
-    fx.push({ x: d.x + d.facing * 24, y: d.y - 90, t: 0, kind: 'block' });
+    d.state = 'block'; d.t = 0; d.stun = 12; d.vx = dir * spec.push * 0.8; a.vx = -dir * spec.push * 0.5;
+    fx.push({ x: d.x + d.facing * 24, y: -90, t: 0, kind: 'block' });
     SFX.block(); hitstop = 3;
-    if (!spec.proj) a.vx = -dir * spec.push * 0.6;
     return 'block';
   }
-  d.hp = Math.max(0, d.hp - spec.dmg);
-  const down = spec.knockdown || d.air || d.hp <= 0;
-  if (down) {
-    d.state = 'down'; d.lying = false; d.t = 0; d.vy = -8.5; d.vx = dir * 5; d.y = Math.min(d.y, -0.01);
-  } else {
-    d.state = 'hit'; d.t = 0; d.stun = spec.stun; d.vx = dir * spec.push; d.crouch = false;
-  }
-  fx.push({ x: cx, y: cy, t: 0, kind: spec.dmg >= 10 ? 'big' : 'hit' });
-  (spec.dmg >= 10 ? SFX.big : SFX.hit)();
-  hitstop = spec.dmg >= 10 ? 7 : 5; shake = spec.dmg >= 10 ? 8 : 4;
+  d.hp = Math.max(1, d.hp - spec.dmg);
+  d.state = 'hit'; d.t = 0; d.stun = spec.stun; d.vx = dir * spec.push; d.crouch = false; d.atk = null;
+  fx.push({ x: (a.x + d.x) / 2, y: spec.type === 'low' ? -20 : -95, t: 0, kind: 'hit' });
+  popText(d.x, -150, '崩れた！', '#ffd23a');
+  SFX.hit(); hitstop = 5; shake = 4;
   return 'hit';
+}
+
+/* ---------- 投げの開始・進行 ---------- */
+function tryThrow(f, o) {
+  const s = f.facing, d = Math.abs(o.x - f.x);
+  if (d > 95 || untouchable(o) || (o.state !== 'idle' && o.state !== 'hit' && o.state !== 'block' && o.state !== 'attack')) return false;
+  // 投げ外し：相手も同時に投げに入っていたら外れる
+  if (o.state === 'attack' && o.atk === 'throw' && o.t <= ATK.throw.su + 1) {
+    f.state = 'hit'; o.state = 'hit'; f.t = o.t = 0; f.stun = o.stun = 22; f.vx = -s * 6; o.vx = s * 6; f.atk = o.atk = null;
+    popText((f.x + o.x) / 2, -150, '投げ外し！', '#7fd6ff'); fx.push({ x: (f.x + o.x) / 2, y: -90, t: 0, kind: 'block' }); SFX.block();
+    return true;
+  }
+  // こらえる：腰を落としている相手には投げが決まらない
+  if (o.crouch && o.state === 'idle') {
+    f.t = ATK.throw.su + ATK.throw.ac; // そのまま硬直
+    popText(o.x, -150, 'こらえた！', '#7fd6ff'); SFX.block();
+    return true;
+  }
+  const res = (o.state === 'hit' || o.state === 'attack' || o.hp <= 35) ? 'ippon' : 'wazaari';
+  const T = THROWS[f.thName];
+  // 画面端なら着地位置が収まるよう二人を中央へずらす
+  const landX = f.x + s * T.uke[T.uke.length - 1][1];
+  const shift = landX < 70 ? 70 - landX : landX > W - 70 ? W - 70 - landX : 0;
+  f.x += shift; o.x += shift;
+  f.state = 'throw'; f.t = 0; f.vx = 0; f.crouch = false; f.atk = null;
+  f.th = { name: f.thName, t: 0, s, x0: f.x, d0: (o.x - f.x) * s, res, uke: o };
+  o.state = 'thrown'; o.facing = -s; o.vx = 0; o.crouch = false; o.atk = null; o.stun = 0;
+  o.tp = { x: o.x, y: -60, phi: 0 };
+  callout = { text: T.name, t: 0 };
+  SFX.throw();
+  return true;
+}
+function updateThrow(f) {
+  const th = f.th, TH = THROWS[th.name], o = th.uke, s = th.s;
+  th.t++;
+  const t = th.t;
+  let [px, py, phi] = interp(TH.uke, t);
+  px = th.d0 + (px - th.d0) * Math.min(1, t / 6);
+  o.tp = { x: th.x0 + s * px, y: py, phi };
+  if (TH.tori) { const [qx, qy, qp] = interp(TH.tori, t); f.tp = { x: th.x0 + s * qx, y: qy, phi: qp }; } else f.tp = null;
+  const tp = toriPose(th.name, t);
+  f.pose = tp.p; f.facing = s * tp.face;
+
+  if (t === TH.imp) {
+    hitstop = 9; shake = 14; SFX.slam();
+    fx.push({ x: o.tp.x, y: -22, t: 0, kind: 'big' });
+    if (scene === 'fight') {
+      if (th.res === 'ippon') { SFX.ippon(); endRound('ippon', f); }
+      else {
+        f.wz++; o.hp = Math.max(1, o.hp - 18);
+        if (f.wz >= 2) { SFX.ippon(); endRound('awase', f); }
+        else { callout = { text: '技あり', t: 0, big: true }; }
+      }
+    }
+  }
+  if (t >= TH.T) { // 着地して寝る
+    const last = TH.uke[TH.uke.length - 1];
+    o.state = 'down'; o.lying = true; o.t = 0; o.vx = 0; o.tp = null; o.pose = null;
+    o.x = Math.max(WALL, Math.min(W - WALL, th.x0 + s * last[1] + o.facing * 60));
+    if (TH.tori) { const q = TH.tori[TH.tori.length - 1]; f.x = Math.max(WALL, Math.min(W - WALL, th.x0 + s * q[1] + f.facing * 60)); }
+    f.tp = null; f.pose = null; f.state = 'idle'; f.th = null; f.vx = 0;
+  }
 }
 
 /* ---------- ファイター更新 ---------- */
 function updateFighter(f, o, enabled) {
   const inp = f.inp, h = inp.held, p = inp.press;
   if (!enabled) { inp.held = {}; inp.press = {}; }
-  trackCmd(f);
 
-  // 向き
-  if (!f.air && (f.state === 'idle') ) f.facing = o.x >= f.x ? 1 : -1;
-
-  const A = f.atk ? ATK[f.atk] : null;
+  if (f.state === 'idle') f.facing = o.x >= f.x ? 1 : -1;
 
   if (f.state === 'idle') {
-    f.crouch = !f.air && !!h.down;
+    f.crouch = !!h.down;
     const dir = (h.right ? 1 : 0) - (h.left ? 1 : 0);
-    if (!f.air) {
-      f.vx = f.crouch ? 0 : dir * (dir === f.facing ? 3.5 : 2.7);
-      if (f.vx) f.wt += 0.22;
-      if (h.up && !f.crouch) { f.vy = -15.5; f.vx = dir * 4.2; f.y = -0.01; }
-    }
-    // 技
-    const isFire = !f.air && p.punch && fireCommand(f);
-    if (p.throw && !f.air) startAttack(f, 'throw');
-    else if (p.special && !f.air || isFire) { if (!projs.some(q => q.owner === f)) startAttack(f, 'fire'); }
-    else if (p.punch) startAttack(f, f.air ? 'jpunch' : f.crouch ? 'cpunch' : 'punch');
-    else if (p.kick) startAttack(f, f.air ? 'jkick' : f.crouch ? 'sweep' : 'kick');
+    f.vx = f.crouch ? 0 : dir * (dir === f.facing ? 3.0 : 2.4);
+    if (f.vx) f.wt += 0.22;
+    if (p.throw) { startAttack(f, 'throw'); f.thName = pickThrow(f); }
+    else if (p.punch) startAttack(f, 'punch');
+    else if (p.kick) startAttack(f, 'kick');
   } else if (f.state === 'attack') {
     f.t++;
-    const active = A.air ? f.t > A.su : (f.t > A.su && f.t <= A.su + A.ac);
-    if (A.kind === 'throw' && f.t === A.su + 1) {
-      const d = Math.abs(o.x - f.x);
-      if (d < 90 && !o.air && !['down', 'attack_'].includes(o.state) && o.hp > 0) {
-        o.hp = Math.max(0, o.hp - A.dmg);
-        o.state = 'down'; o.lying = false; o.t = 0; o.crouch = false;
-        o.vy = -11; o.vx = f.facing * 4.5; o.y = -0.01; o.facing = -f.facing;
-        o.x = f.x + f.facing * 40;
-        fx.push({ x: o.x, y: -60 + GROUND * 0 - 20, t: 0, kind: 'big', ground: true });
-        SFX.throw(); hitstop = 8; shake = 10; f.hitDone = true;
-      }
-    } else if (A.kind === 'fire' && f.t === A.su + 1) {
-      projs.push({ x: f.x + f.facing * 50, y: -92, vx: f.facing * FIRE.speed, owner: f, t: 0 });
-      SFX.fire();
-    } else if (!A.kind && active && !f.hitDone) {
+    const A = ATK[f.atk];
+    if (A.kind !== 'throw' && f.hitDone && f.t > A.su + A.ac && p.throw) { // 当てた直後は投げにつなげられる
+      startAttack(f, 'throw'); f.thName = pickThrow(f);
+    } else if (A.kind === 'throw') {
+      if (f.t === A.su + 1) tryThrow(f, o);
+    } else if (f.t > A.su && f.t <= A.su + A.ac && !f.hitDone) {
       const x0 = f.x + f.facing * A.rx0, x1 = f.x + f.facing * A.rx1;
-      const box = { x0: Math.min(x0, x1), x1: Math.max(x0, x1), y0: f.y + A.y0, y1: f.y + A.y1 };
-      if (overlap(box, o.hurt())) {
-        if (resolveHit(f, o, A, f.facing)) f.hitDone = true;
-      }
+      const box = { x0: Math.min(x0, x1), x1: Math.max(x0, x1), y0: A.y0, y1: A.y1 };
+      if (overlap(box, o.hurt())) { if (resolveHit(f, o, A, f.facing)) f.hitDone = true; }
     }
-    if (!A.air && f.t >= A.su + A.ac + A.rec) { f.state = 'idle'; f.atk = null; }
+    if (f.state === 'attack' && f.t >= A.su + A.ac + A.rec) { f.state = 'idle'; f.atk = null; }
   } else if (f.state === 'hit' || f.state === 'block') {
     f.t++; f.vx *= 0.82;
     if (f.t >= f.stun) { f.state = 'idle'; f.vx = 0; }
+  } else if (f.state === 'throw') {
+    updateThrow(f);
   } else if (f.state === 'down') {
-    f.t++;
-    if (f.lying) {
-      f.vx *= 0.8;
-      if (f.hp > 0 && f.t > 55) { f.state = 'idle'; f.lying = false; f.vx = 0; }
-    }
+    f.t++; f.vx *= 0.8;
+    if (f.lying && f.hp > 0 && f.t > 60 && scene === 'fight') { f.state = 'idle'; f.lying = false; f.vx = 0; }
   }
-
-  // 物理
-  f.x += f.vx;
-  if (f.y < 0 || f.vy < 0) {
-    f.vy += 0.85; f.y += f.vy;
-    if (f.y >= 0) {
-      f.y = 0; f.vy = 0;
-      if (f.state === 'attack' && A && A.air) { f.state = 'idle'; f.atk = null; f.vx = 0; }
-      else if (f.state === 'idle') f.vx = 0;
-      else if (f.state === 'down') { f.lying = true; f.t = 0; f.vx *= 0.4; shake = Math.max(shake, 5); }
-    }
-  }
-}
-
-function updateProjectiles() {
-  for (const q of projs) {
-    q.x += q.vx; q.t++;
-    const o = players[1 - q.owner.idx];
-    const box = { x0: q.x - 18, x1: q.x + 18, y0: q.y - 18, y1: q.y + 18 };
-    if (overlap(box, o.hurt()) && o.state !== 'down') {
-      resolveHit(q.owner, o, { ...FIRE, proj: true }, Math.sign(q.vx)); q.dead = true;
-    }
-    if (q.x < -40 || q.x > W + 40) q.dead = true;
-    for (const r of projs) if (r !== q && r.owner !== q.owner && Math.abs(r.x - q.x) < 30) { q.dead = r.dead = true; fx.push({ x: q.x, y: GROUND + q.y, t: 0, kind: 'block', ground: true }); }
-  }
-  projs = projs.filter(q => !q.dead);
+  if (f.state !== 'throw' && f.state !== 'thrown') f.x += f.vx;
 }
 
 /* ---------- CPU ---------- */
 function cpuThink(f, o) {
   const L = LEVELS[level];
+  const d = Math.abs(o.x - f.x), fwd = o.x > f.x ? 'right' : 'left', back = fwd === 'right' ? 'left' : 'right';
+  // 相手の投げに反応（腰を落とす or 投げ外し）
+  if (o.state === 'attack' && o.atk === 'throw' && o.t === 1 && d < 110 && f.state === 'idle' && Math.random() < L.def) {
+    if (Math.random() < 0.5) { f.inp.held = { down: true }; ai.t = 14; }
+    else { f.inp.press.throw = true; f.thName = 'osoto'; }
+    return;
+  }
   if (--ai.t > 0) return;
   ai.t = L.think[0] + Math.random() * (L.think[1] - L.think[0]);
   const inp = f.inp; inp.held = {};
-  const d = Math.abs(o.x - f.x), fwd = o.x > f.x ? 'right' : 'left', back = fwd === 'right' ? 'left' : 'right';
   const r = Math.random();
-  const incoming = projs.some(q => q.owner !== f && Math.abs(q.x - f.x) < 240 && Math.sign(q.vx) === Math.sign(f.x - q.x));
-  const threat = (o.state === 'attack' && d < 150) || incoming;
-  if (threat && Math.random() < L.def) {
-    inp.held[back] = true;
-    if (o.atk === 'sweep' || incoming || Math.random() < 0.35) inp.held.down = true;
-    ai.t = 9; return;
+  if (o.state === 'attack' && o.atk !== 'throw' && d < 130 && Math.random() < L.def) {
+    inp.held[back] = true; ai.t = 10; return;
   }
   if (f.state !== 'idle') return;
-  if (d > 360) { if (r < 0.3 && !projs.some(q => q.owner === f)) inp.press.special = true; else inp.held[fwd] = true; }
-  else if (d > 150) {
-    if (r < 0.12 && !projs.some(q => q.owner === f)) inp.press.special = true;
-    else if (r < 0.2) { inp.held.up = true; inp.held[fwd] = true; if (Math.random() < 0.5) setTimeout(() => { f.inp.press.kick = true; }, 380); }
-    else inp.held[fwd] = true;
-  } else {
-    const a = L.agg;
-    if (r < a * 0.32) inp.press.punch = true;
-    else if (r < a * 0.55) inp.press.kick = true;
-    else if (r < a * 0.68) inp.press.throw = true;
-    else if (r < a * 0.78) { inp.held.down = true; inp.press.kick = true; }
-    else if (r < 0.9) inp.held[back] = true;
+  if (d > 110) { inp.held[fwd] = true; return; }
+  // 間合いに入った
+  if (o.state === 'hit') { inp.press.throw = true; inp.held[Math.random() < 0.5 ? fwd : 'x'] = true; return; } // 崩れた相手は投げる
+  const a = L.agg;
+  if (r < a * 0.30) inp.press.punch = true;
+  else if (r < a * 0.45) inp.press.kick = true;
+  else if (r < a * 0.70) { // 投げ（向きで技が変わる）
+    inp.press.throw = true;
+    const k = Math.random();
+    if (k < 0.35) inp.held[fwd] = true; else if (k < 0.55) inp.held[back] = true; else if (k < 0.7) inp.held.down = true;
   }
+  else if (r < 0.85) inp.held[back] = true;
+  else if (r < 0.93) inp.held.down = true;
 }
 
 /* ---------- メイン更新 ---------- */
 function update() {
   frame++;
   fx.forEach(e => e.t++); fx = fx.filter(e => e.t < 18);
+  texts.forEach(e => e.t++); texts = texts.filter(e => e.t < 50);
+  if (callout) { callout.t++; if (callout.t > 90) callout = null; }
   if (shake > 0) shake *= 0.8;
 
   if (scene === 'intro') {
     phaseT++;
-    if (phaseT === 62) { banner = 'FIGHT!'; SFX.fight(); }
+    if (phaseT === 62) { banner = 'はじめ！'; SFX.start(); }
     if (phaseT > 105) { scene = 'fight'; banner = ''; }
     players.forEach(p => { p.inp.press = {}; });
     return;
   }
   if (scene !== 'fight' && scene !== 'roundEnd') return;
-
   if (hitstop > 0) { hitstop--; return; }
 
   const [p1, p2] = players;
   const live = scene === 'fight';
   if (mode === 'cpu' && live) cpuThink(p2, p1);
   updateFighter(p1, p2, live);
-  updateFighter(p2, p1, live && mode !== 'cpu' ? true : live);
-  updateProjectiles();
+  updateFighter(p2, p1, live);
 
   // 押し合い・壁
-  if (!p1.air && !p2.air && Math.abs(p1.x - p2.x) < 48) {
+  const pushable = f => f.state !== 'thrown' && f.state !== 'throw' && f.state !== 'down';
+  if (pushable(p1) && pushable(p2) && Math.abs(p1.x - p2.x) < 48) {
     const ov = 48 - Math.abs(p1.x - p2.x), s = p1.x <= p2.x ? 1 : -1;
     p1.x -= s * ov / 2; p2.x += s * ov / 2;
   }
-  for (const p of players) p.x = Math.max(WALL, Math.min(W - WALL, p.x));
-  if (!p1.air && !p2.air && Math.abs(p1.x - p2.x) < 48) { // 壁際で重ならない
+  for (const p of players) if (p.state !== 'thrown' && p.state !== 'throw') p.x = Math.max(WALL, Math.min(W - WALL, p.x));
+  if (pushable(p1) && pushable(p2) && Math.abs(p1.x - p2.x) < 48) {
     const s = p1.x <= p2.x ? 1 : -1;
     if (p1.x <= WALL || p1.x >= W - WALL) p2.x = p1.x + s * 48; else p1.x = p2.x - s * 48;
   }
-
   players.forEach(p => { p.inp.press = {}; });
 
   if (scene === 'fight') {
-    if (++timeTick >= 60) { timeTick = 0; timeLeft--; }
-    if (p1.hp <= 0 || p2.hp <= 0 || timeLeft <= 0) endRound();
+    if (timeLeft > 0 && ++timeTick >= 60) { timeTick = 0; timeLeft--; }
+    if (timeLeft <= 0 && !players.some(p => p.state === 'throw')) endRound('time', null);
   } else {
     phaseT++;
-    if (phaseT > 170) nextRound();
+    if (phaseT > 200) nextRound();
   }
 }
-function endRound() {
+function endRound(kind, w) {
   const [p1, p2] = players;
-  scene = 'roundEnd'; phaseT = 0;
-  let w = null;
-  if (p1.hp > p2.hp) w = p1; else if (p2.hp > p1.hp) w = p2;
-  banner = (p1.hp <= 0 || p2.hp <= 0) ? 'K.O.!' : 'TIME UP';
-  if (w) { w.wins++; winnerMsg = (w.idx === 0 ? '1P' : (mode === 'cpu' ? 'CPU' : '2P')) + ' の勝ち！'; } else winnerMsg = 'ひきわけ';
-  SFX.ko(); hitstop = 0;
+  scene = 'roundEnd'; phaseT = 0; callout = null; hitstop = Math.max(hitstop, 0);
+  if (kind === 'time') {
+    banner = '時間切れ';
+    if (p1.wz !== p2.wz) { w = p1.wz > p2.wz ? p1 : p2; winnerMsg = '技ありの差で優勢勝ち'; }
+    else if (p1.hp !== p2.hp) { w = p1.hp > p2.hp ? p1 : p2; winnerMsg = '崩しの差で優勢勝ち'; }
+    else { w = null; winnerMsg = '引き分け'; }
+  } else {
+    banner = kind === 'awase' ? '合わせ技 一本！' : '一本！';
+    winnerMsg = '';
+  }
+  if (w) { w.wins++; winnerMsg = nameOf(w) + ' の勝ち！' + (winnerMsg ? '（' + winnerMsg + '）' : ''); }
 }
 function nextRound() {
   const [p1, p2] = players;
   if (p1.wins >= 2 || p2.wins >= 2) {
     scene = 'matchEnd';
-    const w = p1.wins >= 2 ? '1P' : (mode === 'cpu' ? 'CPU' : '2P');
-    banner = w + ' 勝利！';
+    banner = nameOf(p1.wins >= 2 ? p1 : p2) + ' 勝利！';
     return;
   }
   round++; startRound();
@@ -422,26 +463,21 @@ function nextRound() {
 
 /* ---------- 描画 ---------- */
 function drawBG() {
-  // 道場の壁
   const g = ctx.createLinearGradient(0, 0, 0, GROUND);
   g.addColorStop(0, '#3a2a1c'); g.addColorStop(1, '#7a5836');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, GROUND);
-  // 板壁
   ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 2;
   for (let x = 0; x < W; x += 60) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, GROUND); ctx.stroke(); }
-  // 窓
   for (let i = 0; i < 4; i++) {
     const wx = 90 + i * 220;
     ctx.fillStyle = '#bcd9e8'; ctx.fillRect(wx, 80, 120, 110);
     ctx.fillStyle = '#3a2a1c'; ctx.fillRect(wx + 58, 80, 4, 110); ctx.fillRect(wx, 132, 120, 4);
     ctx.strokeStyle = '#2a1c10'; ctx.lineWidth = 6; ctx.strokeRect(wx, 80, 120, 110);
   }
-  // 掛け軸「柔」
-  ctx.fillStyle = '#f2ead4'; ctx.fillRect(W / 2 - 38, 36, 76, 150);
-  ctx.strokeStyle = '#5a1f1f'; ctx.lineWidth = 5; ctx.strokeRect(W / 2 - 38, 36, 76, 150);
-  ctx.fillStyle = '#111'; ctx.font = `bold 64px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('柔', W / 2, 112);
-  // 梁
+  ctx.fillStyle = '#f2ead4'; ctx.fillRect(W / 2 - 38, 80, 76, 130);
+  ctx.strokeStyle = '#5a1f1f'; ctx.lineWidth = 5; ctx.strokeRect(W / 2 - 38, 80, 76, 130);
+  ctx.fillStyle = '#111'; ctx.font = `bold 60px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('柔', W / 2, 146);
   ctx.fillStyle = '#2a1c10'; ctx.fillRect(0, 0, W, 22);
   // 畳
   const tg = ctx.createLinearGradient(0, GROUND - 30, 0, H);
@@ -458,71 +494,58 @@ function limb(a, b, w, col) {
   ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
 }
 function getPose(f) {
-  const idle = { hip: [0, -62], sh: [0, -110], head: [0, -132], hf: [34, -112], hb: [20, -98], ff: [24, 0], fb: [-20, 0] };
-  const crouch = { hip: [0, -34], sh: [6, -72], head: [10, -93], hf: [36, -78], hb: [22, -66], ff: [32, 0], fb: [-24, 0] };
-  const jump = { hip: [0, -62], sh: [0, -108], head: [0, -130], hf: [30, -112], hb: [16, -100], ff: [26, -34], fb: [-14, -24] };
-  const A = f.atk ? ATK[f.atk] : null;
-  let p;
-  if (f.state === 'down') p = { hip: [0, -50], sh: [0, -100], head: [0, -122], hf: [18, -80], hb: [8, -70], ff: [20, -14], fb: [-16, -6] };
-  else if (f.state === 'hit') p = { hip: [-6, -62], sh: [-16, -108], head: [-24, -128], hf: [10, -80], hb: [-4, -76], ff: [18, 0], fb: [-24, 0] };
-  else if (f.state === 'block') p = f.crouch ? { ...crouch, hf: [30, -90], hb: [22, -86] } : { ...idle, hf: [30, -128], hb: [22, -118] };
-  else if (f.state === 'attack') {
-    let e = 1;
-    const tot = A.su + A.ac + A.rec;
-    if (A.air) e = f.t > A.su ? 1 : f.t / A.su * 0.5;
-    else if (f.t <= A.su) e = f.t / A.su * 0.5;
+  if (f.state === 'throw' && f.pose) return f.pose;
+  if (f.state === 'thrown' || f.state === 'down') return POSE.down;
+  if (f.state === 'hit') return POSE.hit;
+  if (f.state === 'block') return f.crouch ? { ...POSE.crouch, hf: [30, -90], hb: [22, -86] } : { ...POSE.idle, hf: [30, -128], hb: [22, -118] };
+  if (f.state === 'attack') {
+    const A = ATK[f.atk];
+    let e;
+    if (f.t <= A.su) e = f.t / A.su * 0.5;
     else if (f.t <= A.su + A.ac) e = 1;
     else e = Math.max(0, 0.6 * (1 - (f.t - A.su - A.ac) / A.rec));
-    if (f.atk === 'punch') p = { ...idle, sh: [4, -110], hf: [30 + e * 52, -108] };
-    else if (f.atk === 'kick') p = { ...idle, sh: [-6 * e, -110], head: [-6 * e, -132], hf: [14, -102], ff: [24 + e * 74, -16 - e * 62] };
-    else if (f.atk === 'cpunch') p = { ...crouch, hf: [32 + e * 50, -70] };
-    else if (f.atk === 'sweep') p = { ...crouch, ff: [30 + e * 76, -8], fb: [-26, 0] };
-    else if (f.atk === 'jpunch') p = { ...jump, hf: [30 + e * 45, -96] };
-    else if (f.atk === 'jkick') p = { ...jump, ff: [26 + e * 64, -50 + e * 8] };
-    else if (f.atk === 'throw') p = { ...idle, sh: [6, -108], head: [10, -130], hf: [46, -98], hb: [42, -88], ff: [30, 0], fb: [-22, 0] };
-    else if (f.atk === 'fire') {
-      const x = 28 + (f.t > A.su ? 30 : e * 20);
-      p = { ...crouch, sh: [6, -80], head: [10, -100], hf: [x + 4, -94], hb: [x - 4, -86] };
-    }
-  } else if (f.air) p = jump;
-  else if (f.crouch) p = crouch;
-  else {
-    p = { ...idle };
-    const bob = Math.sin(frame * 0.1) * 2;
-    p.sh = [0, -110 + bob]; p.head = [0, -132 + bob]; p.hf = [34, -112 + bob];
-    if (f.vx) {
-      const s = Math.sin(f.wt) * 14;
-      p.ff = [24 + s, Math.min(0, -Math.cos(f.wt) * 8)]; p.fb = [-20 - s, Math.min(0, Math.cos(f.wt) * 8)];
-    }
+    if (f.atk === 'punch') return { ...POSE.idle, sh: [4, -110], hf: [30 + e * 56, -102], hb: [26 + e * 50, -96] };
+    if (f.atk === 'kick') return { ...POSE.idle, sh: [-4 * e, -108], ff: [22 + e * 76, -4], fb: [-22, 0] };
+    return POSE.grab; // 投げの構え
+  }
+  if (f.crouch) return POSE.crouch;
+  const p = { ...POSE.idle }, bob = Math.sin(frame * 0.1) * 2;
+  p.sh = [0, -110 + bob]; p.head = [0, -132 + bob]; p.hf = [34, -112 + bob];
+  if (f.vx) {
+    const s = Math.sin(f.wt) * 14;
+    p.ff = [24 + s, Math.min(0, -Math.cos(f.wt) * 8)]; p.fb = [-20 - s, Math.min(0, Math.cos(f.wt) * 8)];
   }
   return p;
 }
 function drawFighter(f) {
   const c = f.ch, p = getPose(f);
+  const tpOn = f.tp && (f.state === 'thrown' || f.state === 'throw');
+  const sx = tpOn ? f.tp.x : f.x;
   // 影
   ctx.fillStyle = 'rgba(0,0,0,.28)';
-  const sh = Math.max(0.4, 1 + f.y / 260);
-  ctx.beginPath(); ctx.ellipse(f.x, GROUND, 38 * sh, 9 * sh, 0, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(sx, GROUND, tpOn && f.tp.y > -40 ? 62 : 38, 9, 0, 0, 7); ctx.fill();
 
   ctx.save();
-  ctx.translate(f.x, GROUND + f.y); ctx.scale(f.facing, 1);
-  if (f.state === 'down') { ctx.translate(0, -18); ctx.rotate(-Math.PI / 2 * Math.min(1, (f.lying ? 1 : 0.4 + f.t * 0.1))); }
-  // 奥の手足
+  if (tpOn) {
+    ctx.translate(f.tp.x, GROUND + f.tp.y);
+    ctx.rotate(f.facing * f.tp.phi);
+    ctx.scale(f.facing, 1);
+    ctx.translate(0, 60);
+  } else {
+    ctx.translate(f.x, GROUND); ctx.scale(f.facing, 1);
+    if (f.state === 'down') { ctx.translate(0, -18); ctx.rotate(-PI / 2); }
+  }
   limb(p.sh, p.hb, 12, c.shade);
   limb([p.hip[0] - 5, p.hip[1]], p.fb, 15, c.shade);
-  // 胴
   limb(p.hip, p.sh, 36, c.gi);
   ctx.save(); ctx.strokeStyle = c.belt; ctx.lineWidth = 9; ctx.lineCap = 'butt';
   const bx = p.hip[0] + (p.sh[0] - p.hip[0]) * 0.12, by = p.hip[1] + (p.sh[1] - p.hip[1]) * 0.12;
   ctx.beginPath(); ctx.moveTo(bx - 18, by); ctx.lineTo(bx + 18, by); ctx.stroke(); ctx.restore();
   limb([p.sh[0] - 6, p.sh[1] + 6], [p.sh[0] + 6, p.sh[1] + 30], 5, c.shade); // 襟
-  // 頭
   ctx.fillStyle = c.skin; ctx.beginPath(); ctx.arc(p.head[0], p.head[1], 14, 0, 7); ctx.fill();
-  ctx.fillStyle = c.hair; ctx.beginPath(); ctx.arc(p.head[0], p.head[1], 14.5, Math.PI * 0.95, Math.PI * 2.1); ctx.fill();
+  ctx.fillStyle = c.hair; ctx.beginPath(); ctx.arc(p.head[0], p.head[1], 14.5, PI * 0.95, PI * 2.1); ctx.fill();
   ctx.fillRect(p.head[0] - 14, p.head[1] - 4, 7, 8);
-  if (c.band) { ctx.fillStyle = c.band; ctx.fillRect(p.head[0] - 14, p.head[1] - 9, 29, 4); }
-  ctx.fillStyle = '#111'; ctx.fillRect(p.head[0] + 5, p.head[1] - 2, 3, f.state === 'hit' ? 1 : 4);
-  // 手前の脚・腕
+  ctx.fillStyle = '#111'; ctx.fillRect(p.head[0] + 5, p.head[1] - 2, 3, (f.state === 'hit' || f.state === 'thrown') ? 1 : 4);
   limb([p.hip[0] + 5, p.hip[1]], p.ff, 16, c.gi);
   ctx.fillStyle = c.skin;
   ctx.beginPath(); ctx.arc(p.ff[0] + 3, p.ff[1], 7, 0, 7); ctx.fill();
@@ -534,74 +557,78 @@ function drawFighter(f) {
 }
 function drawFx() {
   for (const e of fx) {
-    const y = e.ground ? GROUND + e.y : GROUND + e.y;
     const k = e.t / 18;
-    ctx.save(); ctx.translate(e.x, y);
+    ctx.save(); ctx.translate(e.x, GROUND + e.y);
     ctx.globalAlpha = 1 - k;
     if (e.kind === 'block') {
       ctx.strokeStyle = '#9ad'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(0, 0, 8 + k * 22, 0, 7); ctx.stroke();
     } else {
-      const R = (e.kind === 'big' ? 46 : 28) * (0.5 + k);
+      const R = (e.kind === 'big' ? 70 : 28) * (0.5 + k);
       ctx.fillStyle = e.kind === 'big' ? '#ffd23a' : '#fff';
       ctx.beginPath();
-      for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2, r = i % 2 ? R * 0.45 : R; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+      for (let i = 0; i < 16; i++) { const a = i / 16 * PI * 2, r = i % 2 ? R * 0.45 : R; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
       ctx.closePath(); ctx.fill();
       ctx.strokeStyle = '#e0422a'; ctx.lineWidth = 3; ctx.stroke();
     }
     ctx.restore();
   }
-  for (const q of projs) {
-    ctx.save(); ctx.translate(q.x, GROUND + q.y);
-    const g = ctx.createRadialGradient(0, 0, 3, 0, 0, 26);
-    g.addColorStop(0, '#fff'); g.addColorStop(0.4, '#7fd6ff'); g.addColorStop(1, 'rgba(60,140,255,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, 26, 0, 7); ctx.fill();
-    ctx.fillStyle = 'rgba(160,220,255,.5)';
-    for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.arc(-Math.sign(q.vx) * i * 14, 0, 14 - i * 3, 0, 7); ctx.fill(); }
-    ctx.restore();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const e of texts) {
+    ctx.globalAlpha = 1 - e.t / 50; ctx.font = `bold 26px ${FONT}`;
+    ctx.lineWidth = 5; ctx.strokeStyle = '#000'; ctx.strokeText(e.s, e.x, GROUND + e.y - e.t * 0.6);
+    ctx.fillStyle = e.col; ctx.fillText(e.s, e.x, GROUND + e.y - e.t * 0.6);
   }
+  ctx.globalAlpha = 1;
 }
-function bar(x, w, hp, rtl, name, wins) {
+function bar(x, w, hp, rtl, name, wins, wz) {
   ctx.fillStyle = '#000'; ctx.fillRect(x - 3, 21, w + 6, 30);
   ctx.fillStyle = '#5a1a1a'; ctx.fillRect(x, 24, w, 24);
   const cw = w * hp / 100;
   const g = ctx.createLinearGradient(0, 24, 0, 48);
-  g.addColorStop(0, hp > 30 ? '#ffe94a' : '#ff7a4a'); g.addColorStop(1, hp > 30 ? '#e08a10' : '#c0301a');
+  g.addColorStop(0, hp > 35 ? '#ffe94a' : '#ff7a4a'); g.addColorStop(1, hp > 35 ? '#e08a10' : '#c0301a');
   ctx.fillStyle = g; ctx.fillRect(rtl ? x + w - cw : x, 24, cw, 24);
   ctx.fillStyle = '#fff'; ctx.font = `bold 20px ${FONT}`; ctx.textBaseline = 'alphabetic';
   ctx.textAlign = rtl ? 'right' : 'left'; ctx.fillText(name, rtl ? x + w : x, 78);
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 2; i++) { // 取った本数
     const cx = rtl ? x + w - (name.length * 20 + 24 + i * 22) : x + name.length * 20 + 24 + i * 22;
     ctx.fillStyle = i < wins ? '#ffd23a' : 'rgba(255,255,255,.2)';
     ctx.beginPath(); ctx.arc(cx, 71, 8, 0, 7); ctx.fill();
   }
+  for (let i = 0; i < 2; i++) { // 技あり
+    const bx = rtl ? x + w - 34 - i * 38 : x + i * 38;
+    ctx.fillStyle = i < wz ? '#e0422a' : 'rgba(255,255,255,.15)'; ctx.fillRect(bx, 86, 34, 20);
+    ctx.fillStyle = i < wz ? '#fff' : 'rgba(255,255,255,.4)'; ctx.font = `bold 14px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('技', bx + 17, 97);
+  }
 }
 function drawHUD() {
   const [p1, p2] = players;
-  bar(30, 380, p1.hp, false, '1P ' + p1.ch.name, p1.wins);
-  bar(W - 410, 380, p2.hp, true, (mode === 'cpu' ? 'CPU ' : '2P ') + p2.ch.name, p2.wins);
+  bar(30, 380, p1.hp, false, '1P ' + p1.ch.name, p1.wins, p1.wz);
+  bar(W - 410, 380, p2.hp, true, (mode === 'cpu' ? 'CPU ' : '2P ') + p2.ch.name, p2.wins, p2.wz);
   ctx.fillStyle = '#000'; ctx.fillRect(W / 2 - 32, 18, 64, 48);
   ctx.fillStyle = timeLeft <= 10 ? '#ff6a4a' : '#fff'; ctx.font = `bold 38px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(String(Math.max(0, timeLeft)).padStart(2, '0'), W / 2, 44);
 }
 function bigText(t, y, size, col) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `900 ${size}px ${FONT}`;
-  ctx.lineWidth = 10; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; ctx.strokeText(t, W / 2, y);
+  ctx.lineWidth = Math.max(6, size / 9); ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; ctx.strokeText(t, W / 2, y);
   ctx.fillStyle = col; ctx.fillText(t, W / 2, y);
 }
 function drawTitle() {
   drawBG();
-  ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, 0, W, H);
-  bigText('柔道ファイター', 130, 84, '#fff');
+  ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, W, H);
+  bigText('柔道ファイター', 100, 80, '#fff');
   ctx.fillStyle = '#ffd23a'; ctx.font = `bold 22px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('投げて、打って、一本を取れ！', W / 2, 200);
+  ctx.fillText('崩して、投げて、一本を取れ！', W / 2, 168);
   MENU().forEach((it, i) => {
-    const y = 270 + i * 70, sel = i === menuSel;
-    ctx.fillStyle = sel ? '#c0392b' : 'rgba(255,255,255,.12)'; ctx.fillRect(280, y, 400, 56);
-    ctx.strokeStyle = sel ? '#ffd23a' : '#888'; ctx.lineWidth = 3; ctx.strokeRect(280, y, 400, 56);
-    ctx.fillStyle = '#fff'; ctx.font = `bold 24px ${FONT}`; ctx.fillText(it.text, W / 2, y + 29);
+    const y = 250 + i * 66, sel = i === menuSel;
+    ctx.fillStyle = sel ? '#c0392b' : 'rgba(255,255,255,.12)'; ctx.fillRect(280, y, 400, 54);
+    ctx.strokeStyle = sel ? '#ffd23a' : '#888'; ctx.lineWidth = 3; ctx.strokeRect(280, y, 400, 54);
+    ctx.fillStyle = '#fff'; ctx.font = `bold 24px ${FONT}`; ctx.fillText(it.text, W / 2, y + 28);
   });
-  ctx.fillStyle = '#ccc'; ctx.font = `16px ${FONT}`;
-  ctx.fillText('↑↓で選んで Enter / タップで決定', W / 2, 500);
+  ctx.fillStyle = '#ddd'; ctx.font = `16px ${FONT}`;
+  ctx.fillText('投げ技（L）：そのまま＝大外刈　前＝背負い投げ　後ろ＝巴投げ　しゃがみ＝内股', W / 2, 468);
+  ctx.fillText('↑↓で選んで Enter ／ タップで決定', W / 2, 500);
 }
 
 function draw() {
@@ -610,14 +637,20 @@ function draw() {
   if (scene === 'title') { drawTitle(); ctx.restore(); return; }
   if (shake > 0.5) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
   drawBG();
-  // 手前にいる方を後に描く（立っている方を上に）
-  [...players].sort((a, b) => (a.state === 'down') - (b.state === 'down') || (a.state === 'attack') - (b.state === 'attack')).forEach(drawFighter);
+  [...players].sort((a, b) => (a.state === 'thrown') - (b.state === 'thrown')).forEach(drawFighter);
   drawFx();
   ctx.restore();
   drawHUD();
+  if (callout) {
+    const k = Math.min(1, callout.t / 6);
+    ctx.save(); ctx.globalAlpha = callout.t > 70 ? 1 - (callout.t - 70) / 20 : 1;
+    if (callout.big) bigText(callout.text, 200, 64 + 24 * (1 - k), '#ff5a3a');
+    else bigText(callout.text, 140, 54 + 20 * (1 - k), '#fff');
+    ctx.restore();
+  }
   if (banner) {
-    if (scene === 'intro') bigText(banner, 250, banner === 'FIGHT!' ? 110 : 90, banner === 'FIGHT!' ? '#ff5a3a' : '#fff');
-    else if (scene === 'roundEnd') { bigText(banner, 230, 110, '#ffd23a'); if (phaseT > 50) bigText(winnerMsg, 330, 48, '#fff'); }
+    if (scene === 'intro') bigText(banner, 250, 96, banner === 'はじめ！' ? '#ff5a3a' : '#fff');
+    else if (scene === 'roundEnd') { bigText(banner, 230, 110, '#ffd23a'); if (phaseT > 50) bigText(winnerMsg, 330, 40, '#fff'); }
     else if (scene === 'matchEnd') {
       ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(0, 0, W, H);
       bigText(banner, 220, 96, '#ffd23a');
