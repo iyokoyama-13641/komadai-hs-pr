@@ -93,7 +93,7 @@ const SFX = {
 const ATK = {
   punch: { su: 5, ac: 3, rec: 12, dmg: 5, rx0: 15, rx1: 80,  y0: -125, y1: -60, type: 'mid', stun: 32, push: 9, label: '突き放し' },
   kick:  { su: 9, ac: 4, rec: 20, dmg: 7, rx0: 15, rx1: 100, y0: -30,  y1: 0,   type: 'low', stun: 36, push: 5, label: '足払い' },
-  throw: { su: 5, ac: 1, rec: 28, kind: 'throw' },
+  throw: { su: 8, ac: 1, rec: 28, kind: 'throw' },
 };
 
 /* ---------- 投げ技（アニメーション定義） ----------
@@ -167,7 +167,7 @@ class Fighter {
 /* ---------- ゲーム状態 ---------- */
 let scene = 'title', mode = 'cpu', level = 1, menuSel = 0;
 const players = [new Fighter(0), new Fighter(1)];
-let fx = [], texts = [], frame = 0, hitstop = 0, shake = 0, paused = false, callout = null;
+let fx = [], texts = [], frame = 0, hitstop = 0, shake = 0, paused = false, callout = null, slowmo = 0, flash = 0;
 let round = 1, timeLeft = 90, timeTick = 0, phaseT = 0, banner = '', winnerMsg = '';
 const LEVELS = [
   { label: 'かんたん', think: [20, 34], def: 0.25, agg: 0.55 },
@@ -273,7 +273,7 @@ function resolveHit(a, d, spec, dir) {
   d.state = 'hit'; d.t = 0; d.stun = spec.stun; d.vx = dir * spec.push; d.crouch = false; d.atk = null;
   fx.push({ x: (a.x + d.x) / 2, y: spec.type === 'low' ? -20 : -95, t: 0, kind: 'hit' });
   popText(d.x, -150, '崩れた！', '#ffd23a');
-  SFX.hit(); hitstop = 5; shake = 4;
+  SFX.hit(); hitstop = 5; shake = 4; burst(d.x, 4, 34);
   return 'hit';
 }
 
@@ -302,7 +302,7 @@ function tryThrow(f, o) {
   f.state = 'throw'; f.t = 0; f.vx = 0; f.crouch = false; f.atk = null;
   f.th = { name: f.thName, t: 0, s, x0: f.x, d0: (o.x - f.x) * s, res, uke: o };
   o.state = 'thrown'; o.facing = -s; o.vx = 0; o.crouch = false; o.atk = null; o.stun = 0;
-  o.tp = { x: o.x, y: -60, phi: 0 };
+  o.tp = { x: o.x, y: -60, phi: 0 }; o.th2 = f.th;
   callout = { text: T.name, t: 0 };
   SFX.throw();
   return true;
@@ -319,7 +319,7 @@ function updateThrow(f) {
   f.pose = tp.p; f.facing = s * tp.face;
 
   if (t === TH.imp) {
-    hitstop = 9; shake = 14; SFX.slam();
+    hitstop = 9; shake = 14; SFX.slam(); impactFX(o.tp.x);
     fx.push({ x: o.tp.x, y: -22, t: 0, kind: 'big' });
     if (scene === 'fight') {
       if (th.res === 'ippon') { SFX.ippon(); endRound('ippon', f); }
@@ -332,7 +332,7 @@ function updateThrow(f) {
   }
   if (t >= TH.T) { // 着地して寝る
     const last = TH.uke[TH.uke.length - 1];
-    o.state = 'down'; o.lying = true; o.t = 0; o.vx = 0; o.tp = null; o.pose = null;
+    o.state = 'down'; o.lying = true; o.t = 0; o.vx = 0; o.tp = null; o.pose = null; o.th2 = null;
     o.x = Math.max(WALL, Math.min(W - WALL, th.x0 + s * last[1] + o.facing * 60));
     if (TH.tori) { const q = TH.tori[TH.tori.length - 1]; f.x = Math.max(WALL, Math.min(W - WALL, th.x0 + s * q[1] + f.facing * 60)); }
     f.tp = null; f.pose = null; f.state = 'idle'; f.th = null; f.vx = 0;
@@ -415,6 +415,7 @@ function cpuThink(f, o) {
 /* ---------- メイン更新 ---------- */
 function update() {
   frame++;
+  if (slowmo > 0) slowmo--; flash *= 0.82; tickFX3D();
   fx.forEach(e => e.t++); fx = fx.filter(e => e.t < 18);
   texts.forEach(e => e.t++); texts = texts.filter(e => e.t < 50);
   if (callout) { callout.t++; if (callout.t > 90) callout = null; }
@@ -540,12 +541,64 @@ function buildDojo(S) {
   const beam = new THREE.Mesh(new THREE.BoxGeometry(1800, 36, 36), frameM); beam.position.set(480, 500, -405); S.add(beam);
   [-120, 1080].forEach(x => { const pl = new THREE.Mesh(new THREE.BoxGeometry(46, 520, 46), frameM); pl.position.set(x, 260, -400); S.add(pl); });
 }
-const MATS = {};
+const HAS3 = typeof THREE !== 'undefined';
+const _up = HAS3 ? new THREE.Vector3(0, 1, 0) : null;
+const _d = HAS3 ? new THREE.Vector3() : null;
+function place(mesh, a, b, rx, rz) { // a→b に円柱を置く
+  _d.subVectors(b, a); const len = _d.length() || 0.001;
+  mesh.position.copy(a).addScaledVector(_d, 0.5);
+  mesh.quaternion.setFromUnitVectors(_up, _d.divideScalar(len));
+  mesh.scale.set(rx, len, rz === undefined ? rx : rz);
+}
+const HS = 1.15; // 手の大きさ
+let weaveTex = null;
+function getWeave() {
+  if (!weaveTex) weaveTex = canvasTex(64, 64, (g, w, h) => {
+    g.fillStyle = '#808080'; g.fillRect(0, 0, w, h);
+    for (let i = -h; i < w; i += 4) { g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = 1; g.beginPath(); g.moveTo(i, 0); g.lineTo(i + h, h); g.stroke(); g.strokeStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.moveTo(i + w, 0); g.lineTo(i, h); g.stroke(); }
+  }, 1.5, 1.5);
+  return weaveTex;
+}
+// 指のある手：手のひら＋指4本（3関節）＋親指（2関節）。+Y方向に指が伸び、+Z側が手のひら
+function buildHand(body, skin, mirror) {
+  const g = new THREE.Group(); g.scale.set(mirror ? -HS : HS, HS, HS); body.add(g);
+  const mk = (geo) => { const m = new THREE.Mesh(geo, skin); m.castShadow = true; return m; };
+  const palm = mk(new THREE.BoxGeometry(9, 9, 3.4)); palm.position.y = 4.6; g.add(palm);
+  const pad = mk(new THREE.SphereGeometry(1, 10, 8)); pad.scale.set(4.6, 3.4, 2.2); pad.position.set(0.4, 2, 0.8); g.add(pad);
+  const knuckle = mk(new THREE.CylinderGeometry(0.9, 0.9, 9.4, 8)); knuckle.rotation.z = PI / 2; knuckle.position.set(0, 9.2, -0.2); knuckle.scale.set(1.4, 1, 1.6); g.add(knuckle);
+  const chain = (x, y, lens, r) => {
+    const root = new THREE.Group(); root.position.set(x, y, 0); g.add(root);
+    const joints = [root]; let parent = root;
+    lens.forEach((L, i) => {
+      if (i > 0) { const j = new THREE.Group(); j.position.y = lens[i - 1] + r * 1.2; parent.add(j); parent = j; joints.push(j); }
+      const geo = new THREE.CapsuleGeometry(r * (1 - i * 0.07), L, 2, 6); geo.translate(0, L / 2 + r, 0);
+      parent.add(mk(geo));
+    });
+    return joints;
+  };
+  const fingers = [[3.3, [4.4, 2.9, 2.3]], [1.1, [4.9, 3.2, 2.4]], [-1.1, [4.5, 3.0, 2.3]], [-3.3, [3.6, 2.3, 2.0]]].map(([x, l]) => chain(x, 9, l, 1.25));
+  const thumb = chain(4.9, 2.4, [3.8, 3.0], 1.45); thumb[0].rotation.z = -0.8; thumb[0].rotation.y = 0.4;
+  return { g, fingers, thumb };
+}
+function setCurl(h, c) {
+  h.fingers.forEach((j, i) => { const v = c * (1 + 0.06 * (i - 1.5)); j[0].rotation.x = v * 1.25; j[1].rotation.x = v * 1.55; j[2].rotation.x = v * 1.0; });
+  h.thumb[0].rotation.x = c * 0.5; h.thumb[1].rotation.x = c * 0.95;
+}
+const _hx = HAS3 ? new THREE.Vector3() : null, _hy = HAS3 ? new THREE.Vector3() : null, _hz = HAS3 ? new THREE.Vector3() : null, _hm = HAS3 ? new THREE.Matrix4() : null;
+function orientHand(g, dir, hint) {
+  _hy.copy(dir).normalize();
+  _hz.copy(hint).addScaledVector(_hy, -hint.dot(_hy));
+  if (_hz.lengthSq() < 1e-4) _hz.set(0, 0, 1).addScaledVector(_hy, -_hy.z);
+  _hz.normalize(); _hx.crossVectors(_hy, _hz).normalize();
+  _hm.makeBasis(_hx, _hy, _hz); g.quaternion.setFromRotationMatrix(_hm);
+}
+
 function buildModel(ch, S) {
-  const std = (c, r) => new THREE.MeshStandardMaterial({ color: c, roughness: r });
-  const m = { gi: std(ch.gi, 0.85), shade: std(ch.shade, 0.9), skin: std(ch.skin, 0.55), hair: std(ch.hair, 0.5), belt: std(ch.belt, 0.7), dark: std('#1a1a1a', 0.4), lap: std(ch.shade, 0.9) };
-  const cyl = new THREE.CylinderGeometry(1, 1, 1, 16, 1), sph = new THREE.SphereGeometry(1, 20, 14), box = new THREE.BoxGeometry(1, 1, 1);
-  const hairGeo = new THREE.SphereGeometry(1, 20, 12, 0, PI * 2, 0, PI * 0.52);
+  const weave = getWeave();
+  const std = (c, r, cloth) => { const m = new THREE.MeshStandardMaterial({ color: c, roughness: r }); if (cloth) { m.bumpMap = weave; m.bumpScale = 0.25; } return m; };
+  const m = { gi: std(ch.gi, 0.85, true), shade: std(ch.shade, 0.9, true), skin: std(ch.skin, 0.5), hair: std(ch.hair, 0.45), belt: std(ch.belt, 0.7, true), dark: std('#161616', 0.4), lap: std(ch.shade, 0.9, true), mouth: std('#5a1a1a', 0.6) };
+  const cyl = new THREE.CylinderGeometry(1, 1, 1, 18, 1), sph = new THREE.SphereGeometry(1, 22, 16), box = new THREE.BoxGeometry(1, 1, 1);
+  const hairGeo = new THREE.SphereGeometry(1, 22, 12, 0, PI * 2, 0, PI * 0.52);
   const root = new THREE.Group(), roll = new THREE.Group(), body = new THREE.Group();
   root.add(roll); roll.add(body); S.add(root);
   const add = (geo, mat) => { const me = new THREE.Mesh(geo, mat); me.castShadow = true; body.add(me); return me; };
@@ -555,17 +608,12 @@ function buildModel(ch, S) {
   M.lapA = add(cyl, m.lap); M.lapB = add(cyl, m.lap);
   M.neck = add(cyl, m.skin); M.head = add(sph, m.skin); M.hair = add(hairGeo, m.hair);
   M.eyeA = add(sph, m.dark); M.eyeB = add(sph, m.dark); M.nose = add(sph, m.skin);
-  M.arms = [0, 1].map(i => ({ sj: add(sph, i ? m.shade : m.gi), up: add(cyl, i ? m.shade : m.gi), ej: add(sph, i ? m.shade : m.gi), lo: add(cyl, i ? m.shade : m.gi), hand: add(sph, m.skin) }));
-  M.legs = [0, 1].map(i => ({ hj: add(sph, i ? m.shade : m.gi), th: add(cyl, i ? m.shade : m.gi), kj: add(sph, i ? m.shade : m.gi), sh: add(cyl, i ? m.shade : m.gi), foot: add(sph, m.skin) }));
+  M.browA = add(box, m.dark); M.browB = add(box, m.dark); M.mouth = add(box, m.mouth);
+  M.earA = add(sph, m.skin); M.earB = add(sph, m.skin);
+  M.aCollar = new THREE.Object3D(); M.aSleeve = new THREE.Object3D(); body.add(M.aCollar); body.add(M.aSleeve);
+  M.arms = [0, 1].map(i => ({ sj: add(sph, i ? m.shade : m.gi), up: add(cyl, i ? m.shade : m.gi), ej: add(sph, i ? m.shade : m.gi), lo: add(cyl, i ? m.shade : m.gi), cuff: add(cyl, i ? m.shade : m.gi), hand: buildHand(body, m.skin, i === 1) }));
+  M.legs = [0, 1].map(i => ({ hj: add(sph, i ? m.shade : m.gi), th: add(cyl, i ? m.shade : m.gi), kj: add(sph, i ? m.shade : m.gi), sh: add(cyl, i ? m.shade : m.gi), foot: add(sph, m.skin), toe: add(sph, m.skin) }));
   return M;
-}
-const HAS3 = typeof THREE !== 'undefined';
-const _up = HAS3 ? new THREE.Vector3(0, 1, 0) : null, _d = HAS3 ? new THREE.Vector3() : null;
-function place(mesh, a, b, rx, rz) { // a→b に円柱を置く
-  _d.subVectors(b, a); const len = _d.length() || 0.001;
-  mesh.position.copy(a).addScaledVector(_d, 0.5);
-  mesh.quaternion.setFromUnitVectors(_up, _d.divideScalar(len));
-  mesh.scale.set(rx, len, rz === undefined ? rx : rz);
 }
 function ik(A, B, L1, L2, hint) { // 2関節（ひじ・ひざ）の位置
   const dx = B[0] - A[0], dy = B[1] - A[1], d = Math.hypot(dx, dy) || 0.001;
@@ -575,17 +623,16 @@ function ik(A, B, L1, L2, hint) { // 2関節（ひじ・ひざ）の位置
   if (nx * hint[0] + ny * hint[1] < 0) { nx = -nx; ny = -ny; }
   return [A[0] + dx * a / d + nx * h, A[1] + dy * a / d + ny * h];
 }
-function applyPose(M, p, fc, hurt) {
+// 体幹・頭・襟/袖のつかみ位置
+function applyBody(M, p, fc, hurt, shout) {
   const V = (pt, z = 0, dx = 0, dy = 0) => new THREE.Vector3(fc * (pt[0] + dx), -(pt[1] + dy), z);
   const lerp2 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
   const hip = p.hip, sh = p.sh;
   const ux = sh[0] - hip[0], uy = sh[1] - hip[1], ul = Math.hypot(ux, uy) || 1, u = [ux / ul, uy / ul], fw = [-u[1], u[0]];
   const at = (pt, f, g, z = 0) => V([pt[0] + fw[0] * f + u[0] * g, pt[1] + fw[1] * f + u[1] * g], z);
-  // 胴体
   place(M.torso, V(hip), V(sh), 14, 19);
   const q = M.torso.quaternion;
-  const cpos = lerp2(hip, sh, 0.82);
-  M.chest.position.copy(V(cpos)); M.chest.quaternion.copy(q); M.chest.scale.set(16, 15, 21);
+  M.chest.position.copy(V(lerp2(hip, sh, 0.82))); M.chest.quaternion.copy(q); M.chest.scale.set(16, 15, 21);
   M.hipS.position.copy(V(hip)); M.hipS.quaternion.copy(q); M.hipS.scale.set(14, 12, 19);
   const bc = lerp2(hip, sh, 0.14);
   place(M.belt, at(bc, 0, -4.5), at(bc, 0, 4.5), 15.8, 21);
@@ -593,27 +640,49 @@ function applyPose(M, p, fc, hurt) {
   M.tail1.position.copy(at(bc, 15, -9, 3)); M.tail1.quaternion.copy(q); M.tail1.scale.set(2.5, 13, 2);
   M.tail2.position.copy(at(bc, 14, -8, -3.5)); M.tail2.quaternion.copy(q); M.tail2.scale.set(2.5, 11, 2);
   const lt = lerp2(hip, sh, 0.86), lb = lerp2(hip, sh, 0.34);
-  place(M.lapA, at(lt, 13.2, 0, 8.5), at(lb, 14.9, 0, -1), 2.6);
-  place(M.lapB, at(lt, 13.2, 0, -8.5), at(lb, 14.9, 0, 1), 2.6);
-  // 頭
+  place(M.lapA, at(lt, 13.2, 0, 8.5), at(lb, 14.9, 0, -1), 2.8);
+  place(M.lapB, at(lt, 13.2, 0, -8.5), at(lb, 14.9, 0, 1), 2.8);
+  M.aCollar.position.copy(at(lerp2(hip, sh, 0.8), 13.5, 0, 0));
+  M.aSleeve.position.copy(V([sh[0] - u[0] * 14 + fw[0] * 3, sh[1] - u[1] * 14 + fw[1] * 3], 23));
   place(M.neck, V(sh, 0, 0, 2), V(p.head), 5.5);
   M.head.position.copy(V(p.head)); M.head.scale.set(14, 15.2, 13.6);
   M.hair.position.copy(V(p.head, 0, 0, 0.3)); M.hair.scale.set(15.2, 15.8, 14.4); M.hair.rotation.z = fc * 0.45;
   const ey = hurt ? 1 : 2.4;
   M.eyeA.position.copy(V(p.head, 5.2, 12.6, 1.5)); M.eyeB.position.copy(V(p.head, -5.2, 12.6, 1.5));
   M.eyeA.scale.set(1.6, ey, 1.6); M.eyeB.scale.set(1.6, ey, 1.6);
+  const brow = shout || hurt ? 0.5 : 0;
+  M.browA.position.copy(V(p.head, 5.2, 12.2, 5.4 - brow * 1)); M.browB.position.copy(V(p.head, -5.2, 12.2, 5.4 - brow * 1));
+  M.browA.scale.set(1.2, 0.9, 4.2); M.browB.scale.set(1.2, 0.9, 4.2);
+  M.browA.rotation.x = brow * 0.35; M.browB.rotation.x = -brow * 0.35;
   M.nose.position.copy(V(p.head, 0, 14.2, -2)); M.nose.scale.set(2.4, 2.4, 2.4);
-  // 腕
-  [[p.hf, 16], [p.hb, -16]].forEach(([hand, z], i) => {
-    const A = M.arms[i], S = [sh[0] - u[0] * 3, sh[1] - u[1] * 3], e = ik(S, hand, 33, 33, [-0.35, 1]);
-    const s3 = V(S, z), e3 = V(e, z), h3 = V(hand, z);
+  M.mouth.position.copy(V(p.head, 0, 13.3, -7.4)); M.mouth.scale.set(1.0, shout ? 3.6 : 0.8, shout ? 5.4 : 4.6);
+  M.earA.position.copy(V(p.head, 13.4, -1, 0)); M.earB.position.copy(V(p.head, -13.4, -1, 0));
+  M.earA.scale.set(2.2, 3.4, 1.4); M.earB.scale.set(2.2, 3.4, 1.4);
+}
+// 手足。grip があれば手を相手の襟・袖へ寄せて掴む
+function toPose(M, fc, v) { const l = M.body.worldToLocal(v.clone()); return [l.x * fc, -l.y, l.z]; }
+function applyLimbs(M, p, fc, grip, curls) {
+  const V = (pt, z = 0, dx = 0, dy = 0) => new THREE.Vector3(fc * (pt[0] + dx), -(pt[1] + dy), z);
+  const sh = p.sh, hip = p.hip;
+  const ux = sh[0] - hip[0], uy = sh[1] - hip[1], ul = Math.hypot(ux, uy) || 1, u = [ux / ul, uy / ul];
+  const tg = grip ? [toPose(M, fc, grip.sleeve), toPose(M, fc, grip.collar)] : null;
+  [[p.hf, 16], [p.hb, -16]].forEach(([hand0, z], i) => {
+    const A = M.arms[i], S = [sh[0] - u[0] * 3, sh[1] - u[1] * 3];
+    let hand = hand0, hz = z, curl = curls[i];
+    if (tg) { const t = tg[i], w = grip.w; hand = [hand0[0] + (t[0] - hand0[0]) * w, hand0[1] + (t[1] - hand0[1]) * w]; hz = z + (t[2] - z) * w; curl = curl + (1.0 - curl) * w; }
+    const e = ik(S, hand, 33, 33, [-0.35, 1]);
+    const s3 = V(S, z), e3 = V(e, (z + hz) / 2), h3 = V(hand, hz);
+    const D = h3.clone().sub(e3); if (D.lengthSq() < 1e-3) D.set(1, 0, 0); D.normalize();
+    const O = h3.clone().addScaledVector(D, -5.6 * HS);
     A.sj.position.copy(s3); A.sj.scale.set(8.8, 8.8, 8.8);
     place(A.up, s3, e3, 7.6);
     A.ej.position.copy(e3); A.ej.scale.set(7, 7, 7);
-    place(A.lo, e3, h3, 6.4);
-    A.hand.position.copy(h3); A.hand.scale.set(6.6, 6.6, 6.6);
+    place(A.lo, e3, O, 6.4);
+    place(A.cuff, O.clone().addScaledVector(D, -3), O.clone().addScaledVector(D, 1), 7.4);
+    const H = A.hand; H.g.position.copy(O);
+    orientHand(H.g, D, new THREE.Vector3(0.0, 0, z > 0 ? -1 : 1));
+    setCurl(H, curl);
   });
-  // 脚
   [[p.ff, 9], [p.fb, -9]].forEach(([foot, z], i) => {
     const L = M.legs[i], H = [hip[0], hip[1] + 2], ank = [foot[0], foot[1] - 6], k = ik(H, ank, 34, 34, [1, 0.3]);
     const h3 = V(H, z), k3 = V(k, z), a3 = V(ank, z);
@@ -622,11 +691,26 @@ function applyPose(M, p, fc, hurt) {
     L.kj.position.copy(k3); L.kj.scale.set(8.6, 8.6, 8.6);
     place(L.sh, k3, a3, 7.8);
     const ang = Math.atan2(a3.y - k3.y, a3.x - k3.x) + PI / 2;
-    L.foot.position.set(a3.x + fc * 6 * Math.cos(ang), a3.y - 2 + 6 * Math.sin(ang), z);
-    L.foot.rotation.z = ang; L.foot.scale.set(12, 5.5, 7.2);
+    L.foot.position.set(a3.x + fc * 5 * Math.cos(ang), a3.y - 2 + 5 * Math.sin(ang), z);
+    L.foot.rotation.z = ang; L.foot.scale.set(10, 5.2, 7);
+    L.toe.position.set(a3.x + fc * 12 * Math.cos(ang), a3.y - 2 + 12 * Math.sin(ang), z);
+    L.toe.rotation.z = ang; L.toe.scale.set(4.8, 3.8, 6.4);
   });
 }
-function poseModel(f) {
+function gripWeight(f) {
+  const su = ATK.throw.su, ac = ATK.throw.ac;
+  if (f.state === 'attack' && f.atk === 'throw') return f.t <= su + ac ? Math.min(1, f.t / su) : Math.max(0, 1 - (f.t - su - ac) / 10);
+  if (f.state === 'throw' && f.th) { const t = f.th.t, imp = THROWS[f.th.name].imp; return t < imp ? 1 : Math.max(0, 1 - (t - imp) / 12); }
+  if (f.state === 'thrown' && f.th2) { const t = f.th2.t; return t < 12 ? 0.9 : Math.max(0, 0.9 * (1 - (t - 12) / 10)); }
+  return 0;
+}
+function handCurls(f) {
+  if (f.state === 'hit' || f.state === 'thrown' || f.state === 'down') return [0.15, 0.15];
+  if (f.state === 'block') return [0.7, 0.7];
+  if (f.state === 'attack' && f.atk === 'punch') return [0.05, 0.45];
+  return [0.5, 0.5];
+}
+function poseBody(f) {
   const M = f.model, p = getPose(f), fc = f.facing;
   const tpOn = f.tp && (f.state === 'thrown' || f.state === 'throw');
   const target = -0.38 * fc;
@@ -640,7 +724,35 @@ function poseModel(f) {
     if (f.state === 'down') { M.roll.position.set(0, 18, 0); M.roll.rotation.z = fc * PI / 2; }
     else { M.roll.position.set(0, 0, 0); M.roll.rotation.z = 0; }
   }
-  applyPose(M, p, fc, f.state === 'hit' || f.state === 'thrown');
+  const shout = f.state === 'throw' || (f.state === 'attack' && f.t > 2);
+  applyBody(M, p, fc, f.state === 'hit' || f.state === 'thrown', shout);
+  return { p, fc };
+}
+
+/* ---------- 演出（土煙・衝撃波） ---------- */
+function burst(x, n, size) {
+  if (!G3.ok) return;
+  for (let i = 0; i < n; i++) {
+    const q = G3.puffs.find(e => e.t >= e.life); if (!q) break;
+    const a = Math.random() * PI * 2, sp = 1.5 + Math.random() * 4;
+    q.t = 0; q.life = 26 + Math.random() * 14; q.size = size * (0.6 + Math.random() * 0.8);
+    q.s.position.set(x + Math.cos(a) * 10, 6, (Math.random() - 0.5) * 50);
+    q.vx = Math.cos(a) * sp; q.vy = 0.5 + Math.random() * 1.2; q.vz = Math.sin(a) * sp * 0.6; q.s.visible = true;
+  }
+}
+function impactFX(x) {
+  burst(x, 16, 62); flash = 1; slowmo = 44;
+  if (G3.ok) { G3.ring.t = 0; G3.ring.m.position.x = x; G3.ring.m.visible = true; }
+}
+function tickFX3D() {
+  if (!G3.ok) return;
+  for (const q of G3.puffs) {
+    if (q.t >= q.life) { q.s.visible = false; continue; }
+    q.t++; const k = q.t / q.life;
+    q.s.position.x += q.vx; q.s.position.y += q.vy; q.s.position.z += q.vz; q.vx *= 0.94; q.vz *= 0.94; q.vy *= 0.97;
+    q.s.scale.setScalar(q.size * (0.5 + k * 1.6)); q.s.material.opacity = 0.55 * (1 - k);
+  }
+  const R = G3.ring; if (R.m.visible) { R.t++; const k = R.t / 22; R.m.scale.setScalar(20 + 260 * k); R.m.material.opacity = 0.8 * (1 - k); if (R.t >= 22) R.m.visible = false; }
 }
 function init3D() {
   if (typeof THREE === 'undefined') { G3.err = 'three.js が読み込めませんでした'; return; }
@@ -649,39 +761,60 @@ function init3D() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(W, H, false);
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    const S = new THREE.Scene(); S.background = new THREE.Color(0x2a1c10);
+    const S = new THREE.Scene(); S.background = new THREE.Color(0x2a1c10); S.fog = new THREE.Fog(0x2a1c10, 1000, 1900);
     const camera = new THREE.PerspectiveCamera(35, W / H, 10, 4000);
-    S.add(new THREE.HemisphereLight(0xfff4e0, 0x6b5a3a, 0.75));
-    const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+    S.add(new THREE.HemisphereLight(0xfff4e0, 0x6b5a3a, 0.62));
+    const sun = new THREE.DirectionalLight(0xffffff, 0.85);
     sun.position.set(260, 760, 560); sun.target.position.set(480, 0, 0);
     sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004;
     Object.assign(sun.shadow.camera, { left: -700, right: 700, top: 500, bottom: -500, near: 100, far: 2200 });
     S.add(sun); S.add(sun.target);
-    const warm = new THREE.PointLight(0xffd9a0, 0.35, 1600); warm.position.set(480, 460, 200); S.add(warm);
+    const rim = new THREE.DirectionalLight(0x8ab8ff, 0.55); rim.position.set(-400, 300, -500); rim.target.position.set(480, 60, 0); S.add(rim); S.add(rim.target);
+    const warm = new THREE.PointLight(0xffd9a0, 0.3, 1600); warm.position.set(480, 460, 200); S.add(warm);
     buildDojo(S);
     players.forEach(p => { p.model = buildModel(p.ch, S); });
-    Object.assign(G3, { ok: true, renderer, S, camera });
+    // 土煙と衝撃波
+    const dust = canvasTex(64, 64, (g) => { const r = g.createRadialGradient(32, 32, 2, 32, 32, 30); r.addColorStop(0, 'rgba(255,245,225,.9)'); r.addColorStop(1, 'rgba(255,245,225,0)'); g.fillStyle = r; g.fillRect(0, 0, 64, 64); });
+    const puffs = [];
+    for (let i = 0; i < 30; i++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: dust, transparent: true, opacity: 0, depthWrite: false })); sp.visible = false; S.add(sp); puffs.push({ s: sp, t: 99, life: 0 }); }
+    const ringM = new THREE.Mesh(new THREE.RingGeometry(0.86, 1, 56), new THREE.MeshBasicMaterial({ color: 0xfff1c0, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false }));
+    ringM.rotation.x = -PI / 2; ringM.position.y = 2; ringM.visible = false; S.add(ringM);
+    Object.assign(G3, { ok: true, renderer, S, camera, puffs, ring: { m: ringM, t: 99 }, orbit: 0, ch: 215, ty: 112 });
   } catch (e) { console.error(e); G3.err = String(e && e.message || e); }
 }
 function updateCamera() {
   const [a, b] = players;
-  let tx = 480, d = 760;
+  const th = players.find(p => p.state === 'throw' && p.th);
+  let tx = 480, d = 760, h = 215, ty = 112, orb = 0, sm = 0.08;
   if (scene !== 'title') {
     const gap = Math.abs(a.x - b.x);
     tx = 480 + ((a.x + b.x) / 2 - 480) * 0.5;
     d = 760 - Math.max(0, Math.min(1, (520 - gap) / 520)) * 150;
   }
-  G3.cx += (tx - G3.cx) * 0.08; G3.cd += (d - G3.cd) * 0.06;
+  if (th) { // 投げの瞬間は寄って、低い位置から回り込む
+    const o = th.th.uke, ox = o.tp ? o.tp.x : o.x;
+    tx = (th.x + ox) / 2; d = 500; h = 130; ty = 92; orb = 0.5 * th.th.s; sm = 0.12;
+  }
+  G3.cx += (tx - G3.cx) * sm; G3.cd += (d - G3.cd) * (th ? 0.12 : 0.06);
+  G3.orbit += (orb - G3.orbit) * 0.07; G3.ch += (h - G3.ch) * 0.08; G3.ty += (ty - G3.ty) * 0.08;
   const sx = (Math.random() - 0.5) * shake * 0.9, sy = (Math.random() - 0.5) * shake * 0.9;
-  G3.camera.position.set(G3.cx + sx, 215 + sy, G3.cd);
-  G3.camera.lookAt(G3.cx + sx, 112, 0);
+  G3.camera.position.set(G3.cx + Math.sin(G3.orbit) * G3.cd + sx, G3.ch + sy, Math.cos(G3.orbit) * G3.cd);
+  G3.camera.lookAt(G3.cx + sx, G3.ty, 0);
   G3.camera.updateMatrixWorld();
 }
+const _w1 = HAS3 ? new THREE.Vector3() : null, _w2 = HAS3 ? new THREE.Vector3() : null;
 function render3D() {
   updateCamera();
-  players.forEach(poseModel);
+  const info = players.map(poseBody);
+  players.forEach(f => f.model.root.updateMatrixWorld(true));
+  players.forEach((f, i) => {
+    const o = players[1 - i], w = gripWeight(f);
+    const grip = w > 0.01 ? { w, collar: o.model.aCollar.getWorldPosition(new THREE.Vector3()), sleeve: o.model.aSleeve.getWorldPosition(new THREE.Vector3()) } : null;
+    applyLimbs(f.model, info[i].p, info[i].fc, grip, handCurls(f));
+  });
   G3.renderer.render(G3.S, G3.camera);
 }
+
 // 地面基準の座標（x, y:上がマイナス）を画面座標へ
 const _pv = HAS3 ? new THREE.Vector3() : null;
 function scr(x, y) {
@@ -706,7 +839,7 @@ function getPose(f) {
   }
   if (f.crouch) return POSE.crouch;
   const p = { ...POSE.idle }, bob = Math.sin(frame * 0.1) * 2;
-  p.sh = [0, -110 + bob]; p.head = [0, -132 + bob]; p.hf = [34, -112 + bob];
+  p.sh = [3, -108 + bob]; p.head = [6, -130 + bob]; p.hip = [-2, -60 + bob * 0.6]; p.hf = [40, -108 + bob]; p.hb = [28, -98 + bob];
   if (f.vx) {
     const s = Math.sin(f.wt) * 14;
     p.ff = [24 + s, Math.min(0, -Math.cos(f.wt) * 8)]; p.fb = [-20 - s, Math.min(0, Math.cos(f.wt) * 8)];
@@ -763,34 +896,62 @@ function drawVignette() {
   g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.45)');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
 }
+function slant(x, y, w, h, sk, rtl) {
+  ctx.beginPath();
+  if (!rtl) { ctx.moveTo(x + sk, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w - sk, y + h); ctx.lineTo(x, y + h); }
+  else { ctx.moveTo(x, y); ctx.lineTo(x + w - sk, y); ctx.lineTo(x + w, y + h); ctx.lineTo(x + sk, y + h); }
+  ctx.closePath();
+}
 function bar(x, w, hp, rtl, name, wins, wz) {
-  ctx.fillStyle = '#000'; ctx.fillRect(x - 3, 21, w + 6, 30);
-  ctx.fillStyle = '#5a1a1a'; ctx.fillRect(x, 24, w, 24);
-  const cw = w * hp / 100;
-  const g = ctx.createLinearGradient(0, 24, 0, 48);
-  g.addColorStop(0, hp > 35 ? '#ffe94a' : '#ff7a4a'); g.addColorStop(1, hp > 35 ? '#e08a10' : '#c0301a');
-  ctx.fillStyle = g; ctx.fillRect(rtl ? x + w - cw : x, 24, cw, 24);
-  ctx.fillStyle = '#fff'; ctx.font = `bold 20px ${FONT}`; ctx.textBaseline = 'alphabetic';
-  ctx.textAlign = rtl ? 'right' : 'left'; ctx.fillText(name, rtl ? x + w : x, 78);
-  for (let i = 0; i < 2; i++) { // 取った本数
-    const cx = rtl ? x + w - (name.length * 20 + 24 + i * 22) : x + name.length * 20 + 24 + i * 22;
-    ctx.fillStyle = i < wins ? '#ffd23a' : 'rgba(255,255,255,.2)';
-    ctx.beginPath(); ctx.arc(cx, 71, 8, 0, 7); ctx.fill();
+  const y = 20, h = 28, sk = 22;
+  ctx.save();
+  slant(x - 3, y - 3, w + 6, h + 6, sk, rtl); ctx.fillStyle = '#000'; ctx.fill();
+  slant(x, y, w, h, sk, rtl); ctx.fillStyle = '#4a1010'; ctx.fill(); ctx.clip();
+  const cw = w * hp / 100, gx = rtl ? x + w - cw : x;
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  if (hp > 35) { g.addColorStop(0, '#fff27a'); g.addColorStop(0.5, '#ffc61a'); g.addColorStop(1, '#d77a00'); }
+  else { g.addColorStop(0, '#ff9a6a'); g.addColorStop(0.5, '#ff4a2a'); g.addColorStop(1, '#a01810'); }
+  ctx.fillStyle = g; ctx.fillRect(gx, y, cw, h);
+  ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.fillRect(x, y, w, h * 0.42);
+  ctx.restore();
+  slant(x, y, w, h, sk, rtl); ctx.strokeStyle = '#eee'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.font = `italic 900 26px ${FONT}`; ctx.textBaseline = 'alphabetic'; ctx.textAlign = rtl ? 'right' : 'left'; ctx.lineJoin = 'round';
+  const nx = rtl ? x + w - 6 : x + 6;
+  ctx.lineWidth = 6; ctx.strokeStyle = '#000'; ctx.strokeText(name, nx, 78);
+  ctx.fillStyle = '#fff'; ctx.fillText(name, nx, 78);
+  for (let i = 0; i < 2; i++) { // 取った本数（ひし形）
+    const cx = rtl ? x + w - 6 - name.length * 28 - 26 - i * 24 : x + 6 + name.length * 28 + 26 + i * 24;
+    ctx.save(); ctx.translate(cx, 68); ctx.rotate(PI / 4);
+    ctx.fillStyle = i < wins ? '#ffd23a' : 'rgba(255,255,255,.2)'; ctx.fillRect(-7, -7, 14, 14);
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.strokeRect(-7, -7, 14, 14); ctx.restore();
   }
   for (let i = 0; i < 2; i++) { // 技あり
-    const bx = rtl ? x + w - 34 - i * 38 : x + i * 38;
-    ctx.fillStyle = i < wz ? '#e0422a' : 'rgba(255,255,255,.15)'; ctx.fillRect(bx, 86, 34, 20);
-    ctx.fillStyle = i < wz ? '#fff' : 'rgba(255,255,255,.4)'; ctx.font = `bold 14px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('技', bx + 17, 97);
+    const bx = rtl ? x + w - 36 - i * 40 : x + 6 + i * 40;
+    ctx.save(); ctx.transform(1, 0, rtl ? 0.3 : -0.3, 1, rtl ? -6 : 6, 0);
+    ctx.fillStyle = i < wz ? '#e0422a' : 'rgba(255,255,255,.15)'; ctx.fillRect(bx, 88, 36, 22);
+    ctx.fillStyle = i < wz ? '#fff' : 'rgba(255,255,255,.4)'; ctx.font = `bold 15px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('技', bx + 18, 99); ctx.restore();
   }
 }
 function drawHUD() {
   const [p1, p2] = players;
-  bar(30, 380, p1.hp, false, '1P ' + p1.ch.name, p1.wins, p1.wz);
-  bar(W - 410, 380, p2.hp, true, (mode === 'cpu' ? 'CPU ' : '2P ') + p2.ch.name, p2.wins, p2.wz);
-  ctx.fillStyle = '#000'; ctx.fillRect(W / 2 - 32, 18, 64, 48);
-  ctx.fillStyle = timeLeft <= 10 ? '#ff6a4a' : '#fff'; ctx.font = `bold 38px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  bar(24, 390, p1.hp, false, '1P ' + p1.ch.name, p1.wins, p1.wz);
+  bar(W - 414, 390, p2.hp, true, (mode === 'cpu' ? 'CPU ' : '2P ') + p2.ch.name, p2.wins, p2.wz);
+  ctx.save(); ctx.translate(W / 2, 42); ctx.rotate(PI / 4);
+  ctx.fillStyle = '#000'; ctx.fillRect(-27, -27, 54, 54);
+  ctx.strokeStyle = timeLeft <= 10 ? '#ff6a4a' : '#ffd23a'; ctx.lineWidth = 3; ctx.strokeRect(-27, -27, 54, 54); ctx.restore();
+  ctx.fillStyle = timeLeft <= 10 ? '#ff6a4a' : '#fff'; ctx.font = `900 34px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(String(Math.max(0, timeLeft)).padStart(2, '0'), W / 2, 44);
+}
+function drawSpeedLines() {
+  const th = players.find(p => p.state === 'throw' && p.th); if (!th) return;
+  const o = th.th.uke, s = scr(o.tp ? o.tp.x : o.x, -70);
+  ctx.save(); ctx.translate(s.x, s.y); ctx.strokeStyle = 'rgba(255,255,255,.22)';
+  for (let i = 0; i < 46; i++) {
+    const a = Math.random() * PI * 2, r0 = 170 + Math.random() * 120, r1 = r0 + 90 + Math.random() * 380;
+    ctx.lineWidth = 1 + Math.random() * 2.5; ctx.beginPath(); ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0 * 0.7); ctx.lineTo(Math.cos(a) * r1, Math.sin(a) * r1 * 0.7); ctx.stroke();
+  }
+  ctx.restore();
 }
 function bigText(t, y, size, col) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `900 ${size}px ${FONT}`;
@@ -822,7 +983,9 @@ function draw() {
   render3D();
   if (scene === 'title') { drawTitle(); return; }
   drawFx();
+  drawSpeedLines();
   drawVignette();
+  if (flash > 0.02) { ctx.fillStyle = `rgba(255,255,255,${flash * 0.55})`; ctx.fillRect(0, 0, W, H); }
   drawHUD();
   drawControls();
   if (callout) {
@@ -847,7 +1010,7 @@ function draw() {
 /* ---------- ループ（60fps固定） ---------- */
 let last = performance.now(), acc = 0;
 function loop(now) {
-  acc += Math.min(100, now - last); last = now;
+  acc += Math.min(100, now - last) * (slowmo > 0 ? 0.35 : 1); last = now;
   while (acc >= 1000 / 60) { if (!paused) update(); acc -= 1000 / 60; }
   draw();
   requestAnimationFrame(loop);
