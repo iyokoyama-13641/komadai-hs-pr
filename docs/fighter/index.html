@@ -7,25 +7,45 @@
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#111;color:#eee;font-family:"Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif;
     -webkit-user-select:none;user-select:none;touch-action:none}
-  #wrap{width:100vw;height:100vh;height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  #wrap{position:relative;width:100vw;height:100vh;height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center}
   /* ゲーム画面は表示枠に必ず全体が収まる大きさにする */
   #stage{position:relative;width:min(100vw,calc(100vh * 16 / 9));width:min(100vw,calc(100dvh * 16 / 9));aspect-ratio:16/9;background:#000}
   #stage canvas{position:absolute;left:0;top:0;width:100%;height:100%;display:block}
-  #pad{display:none;width:100%;max-width:960px;justify-content:space-between;padding:6px 10px 10px;box-sizing:border-box}
+  #thelp,#pad{display:none}
   #pad .grp{display:grid;gap:8px}
-  #dpad{grid-template-columns:repeat(3,70px);grid-template-rows:56px}
-  #acts{grid-template-columns:repeat(3,76px);grid-template-rows:56px}
-  #pad button{border:2px solid #666;background:#2a2a2a;color:#fff;border-radius:12px;font-size:15px;font-weight:bold;touch-action:none}
+  #dpad{width:47%;grid-template-columns:repeat(3,1fr);grid-template-rows:60px}
+  #acts{width:50%;grid-template-columns:repeat(3,1fr);grid-template-rows:60px}
+  #pad button{min-width:0;border:2px solid #666;background:#2a2a2a;color:#fff;border-radius:12px;font-size:13px;font-weight:bold;touch-action:none;padding:0}
   #pad button.on{background:#c0392b}
+  /* スマホ・タブレット（縦）：画面の下に説明とボタンを並べる */
   @media (pointer:coarse){
-    #pad{display:flex}
-    #stage{width:min(100vw,calc((100vh - 76px) * 16 / 9));width:min(100vw,calc((100dvh - 76px) * 16 / 9))}
+    #wrap{justify-content:flex-start}
+    #stage{width:100vw}
+    #thelp{display:block;width:100%;box-sizing:border-box;padding:8px 12px;font-size:14px;line-height:1.65;color:#ddd;overflow-y:auto;max-height:34vh}
+    #thelp b{color:#ffd23a}
+    #pad{display:flex;width:100%;box-sizing:border-box;justify-content:space-between;padding:6px 10px 14px}
+  }
+  /* スマホ（横）：ボタンを画面の両端に重ね、説明は中央下に */
+  @media (pointer:coarse) and (orientation:landscape){
+    #wrap{justify-content:center}
+    #stage{width:min(100vw,calc(100dvh * 16 / 9))}
+    #thelp{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);width:42vw;font-size:11px;line-height:1.45;padding:3px 7px;background:rgba(0,0,0,.6);border-radius:6px;pointer-events:none;max-height:none;overflow:visible}
+    #pad{position:absolute;left:0;right:0;bottom:0;padding:0 8px 8px;pointer-events:none}
+    #pad .grp{pointer-events:auto;opacity:.72}
+    #dpad{width:auto;grid-template-columns:repeat(3,54px);grid-template-rows:46px;gap:5px}
+    #acts{width:auto;grid-template-columns:repeat(3,58px);grid-template-rows:46px;gap:5px}
+    #pad button{font-size:12px;border-radius:9px}
   }
 </style>
 </head>
 <body>
 <div id="wrap">
   <div id="stage"><canvas id="gl"></canvas><canvas id="c" width="960" height="540"></canvas></div>
+  <div id="thelp">
+    <b>投げ技</b>（相手に近づいて［投げ］）<br>
+    ［投げ］＝大外刈　／　相手の方向（◀▶）＋［投げ］＝背負い投げ　／　逆方向＋［投げ］＝巴投げ　／　［腰を落とす］＋［投げ］＝内股<br>
+    <b>一本のコツ</b>：［突き放し］［足払い］が当たって相手が崩れた直後に投げると一本！ 腰を落とすと投げをこらえられます。
+  </div>
   <div id="pad">
     <div class="grp" id="dpad">
       <button data-k="left">◀</button><button data-k="down">腰を落とす</button><button data-k="right">▶</button>
@@ -719,15 +739,23 @@ function drawFx() {
   }
   ctx.globalAlpha = 1;
 }
-let showHelp = true;
+const TOUCH = matchMedia('(pointer:coarse)').matches;
+let showHelp = !TOUCH;
+function fitText(t, x, y, size, maxW) {
+  ctx.font = `bold ${size}px ${FONT}`;
+  const w = ctx.measureText(t).width;
+  if (w > maxW) ctx.font = `bold ${Math.floor(size * maxW / w)}px ${FONT}`;
+  ctx.fillText(t, x, y);
+}
 function drawControls() {
+  if (TOUCH) return;
   if (!showHelp) { ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(W - 150, H - 22, 150, 22); ctx.fillStyle = '#ddd'; ctx.font = `13px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('H: 操作を表示', W - 75, H - 11); return; }
   ctx.fillStyle = 'rgba(0,0,0,.62)'; ctx.fillRect(0, H - 62, W, 62);
   ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
-  ctx.font = `bold 18px ${FONT}`; ctx.fillStyle = "#fff";
-  ctx.fillText('移動 A/D　腰を落とす S（後ろ入力でガード）　突き放し J　足払い K　投げ L' + (mode === '2p' ? '　／　2P: ←→ ↓ , . /' : '（矢印・Z X C も可）'), 12, H - 44);
+  ctx.fillStyle = '#fff';
+  fitText('移動 A/D　腰を落とす S（後ろ入力でガード）　突き放し J　足払い K　投げ L' + (mode === '2p' ? '　／　2P: ←→ ↓ , . /' : '（矢印・Z X C も可）'), 12, H - 44, 18, W - 100);
   ctx.fillStyle = '#ffd23a';
-  ctx.fillText('投げ技：L＝大外刈　／　相手の方向＋L＝背負い投げ　／　逆方向＋L＝巴投げ　／　S＋L＝内股', 12, H - 20);
+  fitText('投げ技：L＝大外刈　／　相手の方向＋L＝背負い投げ　／　逆方向＋L＝巴投げ　／　S＋L＝内股', 12, H - 20, 18, W - 24);
   ctx.fillStyle = '#aaa'; ctx.font = `12px ${FONT}`; ctx.textAlign = 'right'; ctx.fillText('H: 非表示', W - 10, H - 42);
 }
 function drawVignette() {
